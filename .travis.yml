@@ -1,17 +1,17 @@
 language: python
 python:
-  - "2.7"
+  - "3.6"
   - "3.7"
 env:
-  - DJANGO="Django>=1.8,<1.9"
-  - DJANGO="Django>=1.9,<1.10"
-  - DJANGO="Django>=1.10,<1.11"
-  - DJANGO="Django>=1.11,<2.0"
-  - DJANGO="Django>=2.0,<2.1"
+  # - DJANGO="Django>=1.8,<1.9"
+  # - DJANGO="Django>=1.9,<1.10"
+  # - DJANGO="Django>=1.10,<1.11"
+  # - DJANGO="Django>=1.11,<2.0"
+  # - DJANGO="Django>=2.0,<2.1"
   - DJANGO="Django>=2.1,<2.2"
   - DJANGO="Django>=2.2,<3.0"
   - DJANGO="Django>=3.0,<3.1"
-  - DJANGO='https://github.com/django/django/archive/master.tar.gz'
+  # - DJANGO='https://github.com/django/django/archive/master.tar.gz'
 # command to install dependencies
 install:
   - pip install $DJANGO
@@ -23,22 +23,22 @@ script:
 after_success:
   coveralls
 matrix:
-  allow_failures:
-     - env: DJANGO='https://github.com/django/django/archive/master.tar.gz'
-  exclude:
-    - python: "3.7"
-      env: DJANGO="Django>=1.8,<1.9"
-    - python: "3.7"
-      env: DJANGO="Django>=1.9,<1.10"
-    - python: "3.7"
-      env: DJANGO="Django>=1.10,<1.11"
-    - python: "2.7"
-      env: DJANGO="Django>=2.0,<2.1"
-    - python: "2.7"
-      env: DJANGO="Django>=2.1,<2.2"
-    - python: "2.7"
-      env: DJANGO="Django>=2.2,<3.0"
-    - python: "2.7"
-      env: DJANGO="Django>=3.0,<3.1"
-    - python: "2.7"
-      env: DJANGO='https://github.com/django/django/archive/master.tar.gz'
+  # allow_failures:
+  #    - env: DJANGO='https://github.com/django/django/archive/master.tar.gz'
+  # exclude:
+  #   - python: "3.7"
+  #     env: DJANGO="Django>=1.8,<1.9"
+  #   - python: "3.7"
+  #     env: DJANGO="Django>=1.9,<1.10"
+  #   - python: "3.7"
+  #     env: DJANGO="Django>=1.10,<1.11"
+  #   - python: "2.7"
+  #     env: DJANGO="Django>=2.0,<2.1"
+  #   - python: "2.7"
+  #     env: DJANGO="Django>=2.1,<2.2"
+  #   - python: "2.7"
+  #     env: DJANGO="Django>=2.2,<3.0"
+  #   - python: "2.7"
+  #     env: DJANGO="Django>=3.0,<3.1"
+  #   - python: "2.7"
+  #     env: DJANGO='https://github.com/django/django/archive/master.tar.gz'
