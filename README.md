@@ -111,6 +111,5 @@ New maintainers welcome. I (bufke) will only be providing minimal support to kee
 
 ## UH Maintainers
 
-- Fusca Riders
-    - ![Danial Malik](https://github.com/danialmalik)
-    - ![Omar Espana](https://github.com/Chamartin3)
+* [Danial Malik](https://github.com/danialmalik)
+* [Omar Espana](https://github.com/Chamartin3)
