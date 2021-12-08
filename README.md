@@ -1,6 +1,12 @@
 # Django Mass Edit
 
-[![Build Status](https://app.travis-ci.com/unhaggle/django-mass-edit.svg?branch=master)](https://travis-ci.org/burke-software/django-mass-edit)
+**UH Build Status**
+
+[![UH Build Status](https://app.travis-ci.com/unhaggle/django-mass-edit.svg?branch=master)](https://app.travis-ci.com/github/unhaggle/django-mass-edit)
+
+**Original Author's Build Status**
+
+[![Original Author's Build Status](https://travis-ci.org/burke-software/django-mass-edit.svg?branch=master)](https://travis-ci.org/burke-software/django-mass-edit)
 
 From Stanislaw Adaszewski's [blog](http://algoholic.eu/django-mass-change-admin-site-extension/ ). 
 I've fixed bugs and made changes to make it a production friendly drop-in Django app for bulk changes in Django's 
