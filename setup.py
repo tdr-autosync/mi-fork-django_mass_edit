@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="django-mass-edit",
-    version="3.3.3uh",
+    version="3.3.4uhb2dev0",
     author="David Burke",
     author_email="david@burkesoftware.com",
     description=("Make bulk changes in the Django admin interface"),
