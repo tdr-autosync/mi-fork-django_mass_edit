@@ -28,11 +28,10 @@ ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """
 import hashlib
+from itertools import chain
 import types
-import sys
 
 from django.contrib import admin
-from django.core.exceptions import PermissionDenied, ValidationError
 try:
     from django.urls import reverse
 except ImportError:  # Django<2.0
@@ -43,10 +42,6 @@ try:  # Django>=1.9
     get_model = apps.get_model
 except ImportError:
     from django.db.models import get_model
-try:
-    from django.contrib.admin.utils import unquote
-except ImportError:
-    from django.contrib.admin.util import unquote
 from django.contrib.admin import helpers
 from django.utils.translation import gettext_lazy as _
 try:
@@ -60,6 +55,10 @@ from django.utils.html import escape
 from django.shortcuts import render
 from django.forms.formsets import all_valid
 from django.contrib.admin.templatetags.admin_urls import add_preserved_filters
+from django.db.models.fields import reverse_related, related
+from django.forms import model_to_dict
+from django.db import models
+from django.contrib import messages
 
 from . import settings
 
@@ -105,11 +104,54 @@ def mass_change_view(request, app_name, model_name, object_ids, admin_site=None)
 mass_change_view = staff_member_required(mass_change_view)
 
 
-def get_formsets(model, request, obj=None):
-    try:  # Django>=1.9
-        return [f for f, _ in model.get_formsets_with_inlines(request, obj)]
-    except AttributeError:
-        return model.get_formsets(request, obj)
+def get_exclude_fields(
+    model_admin,
+    request,
+    obj=None,
+    extra_exclude=[],
+):
+    """"""
+    exclude = model_admin.get_exclude(request, obj)
+    exclude = [] if exclude is None else list(exclude)
+
+    if (
+        not exclude
+        and hasattr(model_admin.form, '_meta')
+        and model_admin.form._meta.exclude
+    ):
+        exclude.extend(model_admin.form._meta.exclude)
+    
+    exclude.extend(
+        model_admin.get_readonly_fields(request, obj) or []
+    )
+    exclude.extend(extra_exclude)
+
+    # Consistency with `modelform_factory`
+    return exclude or None
+
+
+def get_unique_fields(model_admin, parent_admin=None):
+    """"""
+    unique_fields = []
+
+    for field in model_admin.model._meta.get_fields(include_hidden=True):
+        if issubclass(type(field), reverse_related.ForeignObjectRel):
+            continue
+        elif (
+            parent_admin and
+            issubclass(type(field), related.OneToOneField) and
+            field.remote_field.model == parent_admin.model
+        ):
+            continue
+        elif issubclass(type(field), models.AutoField):
+            continue
+        elif not field.unique:
+            continue
+        elif type(field) == models.OneToOneField:
+            continue
+        unique_fields.append(field.name)
+
+    return unique_fields
 
 
 class MassAdmin(admin.ModelAdmin):
@@ -143,7 +185,7 @@ class MassAdmin(admin.ModelAdmin):
 
     def response_change(self, request, obj):
         """
-        Determines the HttpResponse for the change_view stage.
+        Determines the HttpResponse after a successful mass edit.
         """
         opts = obj._meta
 
@@ -164,15 +206,16 @@ class MassAdmin(admin.ModelAdmin):
         return HttpResponseRedirect(redirect_url)
 
     def render_mass_change_form(
-            self,
-            request,
-            context,
-            add=False,
-            change=False,
-            form_url='',
-            obj=None):
+        self,
+        request,
+        template,
+        context,
+        add=False,
+        change=False,
+        form_url='',
+        obj=None
+    ):
         opts = self.model._meta
-        app_label = opts.app_label
         from django.contrib.contenttypes.models import ContentType
         context.update({
             'add': add,
@@ -190,204 +233,274 @@ class MassAdmin(admin.ModelAdmin):
             'save_on_top': self.save_on_top,
         })
         request.current_app = self.admin_site.name
-        return render(
+        return render(request, template, context)
+
+    def get_modelform(self, request, obj=None, extra_exclude=[]):
+        """"""
+        return self.admin_obj.get_form(
             request,
-            self.mass_change_form_template or [
-                "admin/%s/%s/mass_change_form.html" %
-                (app_label,
-                 opts.object_name.lower()),
-                "admin/%s/mass_change_form.html" %
-                app_label,
-                "admin/mass_change_form.html"],
-            context)
+            obj,
+            **{
+                "exclude": get_exclude_fields(self, request, obj, extra_exclude)
+            }
+        )
+    
+    def get_formsets_with_inlines(self, request, obj=None):
+        """"""
+        if not getattr(self.admin_obj, "massadmin_inline_safe", False):
+            return
+
+        for inline_instance in self.get_inline_instances(request, obj):
+            FormSet = inline_instance.get_formset(
+                request,
+                obj,
+                **{
+                    # Render no initial formset, limit total form per
+                    # formset to one
+                    "extra": 0,
+                    "max_num": 1,
+                }
+            )
+
+            if not getattr(inline_instance, "massadmin_safe", False):
+                continue
+            elif bool(
+                get_unique_fields(inline_instance, self.admin_obj)
+            ):
+                continue
+
+            yield FormSet, inline_instance
+
+    @transaction.atomic
+    def save_mass_objects(
+        self,
+        forms,
+        formsets,
+        inline_instances,
+        fields,
+    ):
+        """"""
+        # May not have `_mass_change` fields
+        if fields:
+            if getattr(self, "massadmin_bulk_change_safe", False):
+                objs = [
+                    obj_form.save(commit=False) for obj_form in forms
+                ]
+                self.admin_obj.model.objects.bulk_update(objs, fields)
+
+                for form in forms:
+                    # `save_m2m` set
+                    form.save_m2m()
+            else:
+                for obj_form in forms:
+                    obj_form.save()
+        
+        for (
+            inline_instance,
+            inline_formsets
+        ) in zip(inline_instances, formsets):
+            if getattr(inline_instance, "massadmin_bulk_change_safe", False):
+                inline_objs = chain.from_iterable(
+                    # List of instances
+                    obj_formset.save(commit=False)
+                    for obj_formset in inline_formsets
+                )
+
+                (
+                    inline_instance.model
+                    .objects.bulk_create(inline_objs)
+                )
+
+                for inline_formset in inline_formsets:
+                    # `save_m2m` set
+                    inline_formset.save_m2m()
+            else:
+                for inline_formset in inline_formsets:
+                    inline_formset.save()
 
     def mass_change_view(
             self,
             request,
             comma_separated_object_ids,
-            extra_context=None):
+            extra_context=None
+        ):
         """The 'mass change' admin view for this model."""
-        global new_object
-        model = self.model
-        opts = model._meta
-        general_error = None
-
-        # Allow model to hide some fields for mass admin
-        exclude_fields = getattr(self.admin_obj, "massadmin_exclude", ())
-        queryset = getattr(
-            self.admin_obj,
-            "massadmin_queryset",
-            self.get_queryset)(request)
+        opts = self.model._meta
+        app_label = opts.app_label
 
         object_ids = comma_separated_object_ids.split(',')
-        object_id = object_ids[0]
+        queryset = (
+            getattr(self.admin_obj, "massadmin_queryset", self.get_queryset)
+            (request)
+            .filter(pk__in=object_ids)
+        )
 
-        try:
-            obj = queryset.get(pk=unquote(object_id))
-        except model.DoesNotExist:
-            obj = None
-
-        # TODO It's necessary to check permission and existence for all object
-        if not self.has_change_permission(request, obj):
-            raise PermissionDenied
-
-        if obj is None:
+        if queryset.exists():
+            obj = queryset.first()
+        else:
             raise Http404(
-                _('%(name)s object with primary key %(key)r does not exist.') % {
-                    'name': force_str(
-                        opts.verbose_name),
-                    'key': escape(object_id)})
+                _(
+                    f"{force_str(opts.verbose_name)} object with primary key "
+                    f"{escape(object_ids[0])} does not exist."
+                )
+            )
 
-        ModelForm = self.get_form(request, obj)
+        form = None
+        forms = []
+        mass_changes = request.POST.getlist("_mass_change")
+
         formsets = []
-        errors, errors_list = None, None
-        mass_changes_fields = request.POST.getlist("_mass_change")
-        if request.method == 'POST':
-            # commit only when all forms are valid
-            try:
-                with transaction.atomic():
-                    objects_count = 0
-                    changed_count = 0
-                    objects = queryset.filter(pk__in=object_ids)
-                    for obj in objects:
-                        objects_count += 1
-                        form = ModelForm(
-                            request.POST,
-                            request.FILES,
-                            instance=obj)
+        inline_instances = []
 
-                        exclude = []
-                        for fieldname, field in list(form.fields.items()):
-                            if fieldname not in mass_changes_fields:
-                                exclude.append(fieldname)
+        post_formsets = []
+        post_inline_instances = []
 
-                        for exclude_fieldname in exclude:
-                            del form.fields[exclude_fieldname]
+        inline_admin_formsets = []
+        mass_inlines = request.POST.getlist("_mass_inline")
 
-                        if form.is_valid():
-                            form_validated = True
-                            new_object = self.save_form(
-                                request,
-                                form,
-                                change=True)
-                        else:
-                            form_validated = False
-                            new_object = obj
-                        prefixes = {}
-                        for FormSet in get_formsets(self, request, new_object):
-                            prefix = FormSet.get_default_prefix()
-                            prefixes[prefix] = prefixes.get(prefix, 0) + 1
-                            if prefixes[prefix] != 1:
-                                prefix = "%s-%s" % (prefix, prefixes[prefix])
-                            if prefix in mass_changes_fields:
-                                formset = FormSet(
-                                    request.POST,
-                                    request.FILES,
-                                    instance=new_object,
-                                    prefix=prefix)
-                                formsets.append(formset)
+        if request.method == "POST":
+            mass_changes_exclude = [
+                field for field in self.admin_obj.model._meta.get_fields()
+                if field.name not in mass_changes
+            ]
 
-                        if all_valid(formsets) and form_validated:
-                            # self.admin_obj.save_model(request, new_object, form, change=True)
-                            self.save_model(
-                                request,
-                                new_object,
-                                form,
-                                change=True)
-                            form.save_m2m()
-                            for formset in formsets:
-                                self.save_formset(
-                                    request,
-                                    form,
-                                    formset,
-                                    change=True)
+            ModelForm = self.get_modelform(
+                request,
+                extra_exclude=(
+                    mass_changes_exclude + get_unique_fields(self.admin_obj)
+                )
+            )
+            forms = [
+                ModelForm(
+                    request.POST,
+                    request.FILES,
+                    instance=queryset_obj
+                )
+                for queryset_obj in queryset
+            ]
 
-                            change_message = self.construct_change_message(
-                                request,
-                                form,
-                                formsets)
-                            self.log_change(
-                                request,
-                                new_object,
-                                change_message)
-                            changed_count += 1
+            is_valid = all(obj_form.is_valid() for obj_form in forms)
+            
+            for (
+                FormSet,
+                inline_instance
+            ) in self.get_formsets_with_inlines(request):
+                obj_formsets = [
+                    FormSet(
+                        request.POST,
+                        request.FILES,
+                        instance=queryset_obj
+                    )
+                    for queryset_obj in queryset
+                ]
 
-                    if changed_count == objects_count:
-                        return self.response_change(request, new_object)
-                    else:
-                        errors = form.errors
-                        errors_list = helpers.AdminErrorList(form, formsets)
-                        # Raise error for rollback transaction in atomic block
-                        raise ValidationError("Not all forms is correct")
+                if FormSet.get_default_prefix() in set(mass_inlines):
+                    post_formsets.append(obj_formsets)
+                    post_inline_instances.append(inline_instance)
 
-            except Exception:
-                general_error = sys.exc_info()[1]
+                formsets.append(obj_formsets)
+                inline_instances.append(inline_instance)
 
-        form = ModelForm(instance=obj)
-        form._errors = errors
-        prefixes = {}
-        for FormSet in get_formsets(self, request, obj):
-            prefix = FormSet.get_default_prefix()
-            prefixes[prefix] = prefixes.get(prefix, 0) + 1
-            if prefixes[prefix] != 1:
-                prefix = "%s-%s" % (prefix, prefixes[prefix])
-            formset = FormSet(instance=obj, prefix=prefix)
-            formsets.append(formset)
+            if is_valid and all_valid(
+                # Validate each inline formset for each object
+                chain.from_iterable(post_formsets)
+            ):
+                self.save_mass_objects(
+                    forms,
+                    post_formsets,
+                    post_inline_instances,
+                    mass_changes
+                )
+                
+                # Log change message corresponding to `obj`
+                change_message = self.construct_change_message(
+                    request,
+                    forms[0],
+                    # May not have posted formsets
+                    post_formsets[0] if post_formsets else None
+                )
+                self.log_change(request, obj, change_message)
 
-        adminForm = helpers.AdminForm(
+                return self.response_change(request, obj)
+            # At least one error
+            else:
+                # Index form and formsets for first object
+                obj_form = forms[0]
+                form = (
+                    self.get_modelform(request)
+                    (instance=obj_form.instance)
+                )
+                form._errors = obj_form._errors
+                formsets = [obj_formsets[0] for obj_formsets in formsets]
+                
+                messages.error(request, "Please correct the errors below.")
+
+        # Pass first object as `instance` if `GET` request
+        form = form or self.get_modelform(request)(instance=obj)
+        admin_form = helpers.AdminForm(
             form=form,
             fieldsets=self.admin_obj.get_fieldsets(request, obj),
             prepopulated_fields=self.admin_obj.get_prepopulated_fields(request, obj),
             readonly_fields=self.admin_obj.get_readonly_fields(request, obj),
             model_admin=self.admin_obj,
         )
-        media = self.media + adminForm.media
+        media = self.media + admin_form.media
+        print(form.errors)
+        # Create `formsets` and `inline_instances` on `GET` request
+        if request.method == "GET":
+            for (
+                FormSet,
+                inline_instance
+            ) in self.get_formsets_with_inlines(request):
+                # Do not pass `instance`, do not want to render
+                # existing formsets
+                formset = FormSet()
 
-        # We don't want the user trying to mass change unique fields!
-        unique_fields = []
-        fields = model._meta.get_fields()
-        for field_name in fields:
-            try:
-                field = model._meta.get_field(field_name)
-                if field.unique:
-                    unique_fields.append(field_name)
-            except Exception:
-                pass
+                formsets.append(formset)
+                inline_instances.append(inline_instance)
 
-        # Buggy! Use at your own risk
-        # inline_admin_formsets = []
-        # for inline, formset in zip(self.inline_instances, formsets):
-        #    fieldsets = list(inline.get_fieldsets(request, obj))
-        #    inline_admin_formset = helpers.InlineAdminFormSet(inline, formset, fieldsets)
-        #    inline_admin_formsets.append(inline_admin_formset)
-        #    media = media + inline_admin_formset.media
+        inline_admin_formsets.extend(
+            self.get_inline_formsets(request, formsets, inline_instances)
+        )
+
+        for inline_admin_formset in inline_admin_formsets:
+            media = media + inline_admin_formset.media
 
         context = {
-            'title': _('Change %s') % force_str(opts.verbose_name),
-            'adminform': adminForm,
-            'object_id': object_id,
-            'original': obj,
-            'unique_fields': unique_fields,
-            'exclude_fields': exclude_fields,
-            'is_popup': '_popup' in request.GET or '_popup' in request.POST,
-            'media': mark_safe(media),
-            # 'inline_admin_formsets': inline_admin_formsets,
-            'errors': errors_list,
-            'general_error': general_error,
-            'app_label': opts.app_label,
-            'object_ids': comma_separated_object_ids,
-            'mass_changes_fields': mass_changes_fields,
+            "title": _(f"Change {force_str(opts.verbose_name)}"),
+            "is_popup": "_popup" in request.GET or "_popup" in request.POST,
+            "app_label": app_label,
+            "admin_form": admin_form,
+            "original": obj,
+            "object_id": obj.id,
+            "object_ids": comma_separated_object_ids,
+            "unique_fields": get_unique_fields(self.admin_obj),
+            "exclude_fields": getattr(self.admin_obj, "massadmin_exclude", ()),
+            "mass_changes_fields": mass_changes,
+            "inline_admin_formsets": inline_admin_formsets,
+            "mass_inlines": mass_inlines,
+            "media": mark_safe(media),
+            **self.admin_site.each_context(request),
+            **(extra_context or {}),
         }
-        context.update(self.admin_site.each_context(request))
-        context.update(extra_context or {})
+
+        template = self.mass_change_form_template or [
+            f"admin/{app_label}/{opts.model_name}/mass_change_form.html",
+            f"admin/{app_label}/mass_change_form.html",
+            "admin/mass_change_form.html"
+        ]
+
         return self.render_mass_change_form(
             request,
+            template,
             context,
             change=True,
-            obj=obj)
+            obj=obj
+        )
 
 
 class MassEditMixin:
     actions = (
         mass_change_selected,
     )
+ 
