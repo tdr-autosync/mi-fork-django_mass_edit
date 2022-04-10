@@ -24,7 +24,7 @@
 <div id="breadcrumbs" class="breadcrumbs">
      <a href="../../../">{% trans "Home" %}</a> &rsaquo;
      <a href="../../">{{ app_label|capfirst|escape }}</a> &rsaquo; 
-     {% if has_change_permission %}<a href="../../{{ opts.object_name.lower }}/">{{ opts.verbose_name_plural|capfirst }}</a>{% else %}{{ opts.verbose_name_plural|capfirst }}{% endif %} &rsaquo; 
+     {% if has_change_permission %}<a href="../../{{ opts.model_name }}/">{{ opts.verbose_name_plural|capfirst }}</a>{% else %}{{ opts.verbose_name_plural|capfirst }}{% endif %} &rsaquo; 
      {% if add %}{% trans "Add" %} {{ opts.verbose_name }}{% else %}{{ object_ids|truncchar:50 }}{% endif %}
 </div>
 {% endif %}{% endblock %}
@@ -38,37 +38,62 @@
 <input type="hidden" name ="_changelist_filters" value="{{ request.META.HTTP_REFERER }}" />
 {% if is_popup %}<input type="hidden" name="_popup" value="1" />{% endif %}
 {% if save_on_top %}{% include "admin/save_only_submit_line.html" %}{% endif %}
-{% if errors %}
+{% if admin_form.non_field_errors %}
     <p class="errornote">
-    {% blocktrans count errors|length as counter %}Please correct the error below.{% plural %}Please correct the errors below.{% endblocktrans %}
+    {% blocktrans count admin_form.non_field_errors|length as counter %}Please correct the error below.{% plural %}Please correct the errors below.{% endblocktrans %}
     </p>
-    <ul class="errorlist">{% for error in adminform.form.non_field_errors %}<li>{{ error }}</li>{% endfor %}</ul>
+    <ul class="errorlist">{% for error in admin_form.non_field_errors %}<li>{{ error }}</li>{% endfor %}</ul>
 {% endif %}
-
-{% for fieldset in adminform %}
+{% for fieldset in admin_form %}
      {% include "admin/includes/mass_fieldset.html" %}
 {% endfor %}
 
 {% block after_field_sets %}{% endblock %}
 
-<!-- Too unstable. Enable at your own risk
-{% for inline_admin_formset in inline_admin_formsets %}
-    <input type="checkbox" name="_mass_change_{{ inline_admin_formset.formset.prefix }}"> {% trans "Mass Change" %}:
-    {% include inline_admin_formset.opts.template %}
-{% endfor %}
--->
+{% block inline_field_sets %}
+<fieldset class="grp-module module">
+  <h2 class="grp-collapse-handler">Inline Mass Edit</h2>
+  {% if inline_admin_formsets %}
+  <table id="inline-formsets" style="width: 100%;">
+    <tbody>
+    {% for inline_admin_formset in inline_admin_formsets %}
+      <tr>
+      {% for inline_admin_form in inline_admin_formset %}
+        {% for field in inline_admin_form.form.hidden_fields %}
+          {{ field.errors }}
+        {% endfor %}
+      {% endfor %}
+        <td style="vertical-align: top;">
+          <input 
+          type="checkbox"
+          class="update_checkbox"
+          name="_mass_inline"
+          value="{{ inline_admin_formset.formset.prefix }}"
+          {% if inline_admin_formset.formset.prefix in mass_inlines %}checked{% endif %} />
+        </td>
+        <td class="form-row">{% include inline_admin_formset.opts.massadmin_template|default:inline_admin_formset.opts.template %}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <ul class="messagelist">
+      <li class="warning"><strong>NOTE</strong> Inline mass editing is not permitted on this admin table.</p></li>
+  </ul>
+  {% endif %}
+</fieldset>
+{% endblock %}
 
 {% block after_related_objects %}{% endblock %}
 
 {% include "admin/save_only_submit_line.html" %}
 
-{% if adminform and add %}
-   <script type="text/javascript">document.getElementById("{{ adminform.first_field.auto_id }}").focus();</script>
+{% if admin_form and add %}
+   <script type="text/javascript">document.getElementById("{{ admin_form.first_field.auto_id }}").focus();</script>
 {% endif %}
 
 {# JavaScript for prepopulated fields #}
 {% prepopulated_fields_js %}
 
-</div>
-</form></div>
+</div></form></div>
 {% endblock %}
