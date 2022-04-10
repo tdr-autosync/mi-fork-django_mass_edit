@@ -147,8 +147,6 @@ def get_unique_fields(model_admin, parent_admin=None):
             continue
         elif not field.unique:
             continue
-        elif type(field) == models.OneToOneField:
-            continue
         unique_fields.append(field.name)
 
     return unique_fields
@@ -445,7 +443,7 @@ class MassAdmin(admin.ModelAdmin):
             model_admin=self.admin_obj,
         )
         media = self.media + admin_form.media
-        print(form.errors)
+
         # Create `formsets` and `inline_instances` on `GET` request
         if request.method == "GET":
             for (
