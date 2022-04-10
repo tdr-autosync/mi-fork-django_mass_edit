@@ -56,7 +56,6 @@ from django.shortcuts import render
 from django.forms.formsets import all_valid
 from django.contrib.admin.templatetags.admin_urls import add_preserved_filters
 from django.db.models.fields import reverse_related, related
-from django.forms import model_to_dict
 from django.db import models
 from django.contrib import messages
 
@@ -120,7 +119,7 @@ def get_exclude_fields(
         and model_admin.form._meta.exclude
     ):
         exclude.extend(model_admin.form._meta.exclude)
-    
+
     exclude.extend(
         model_admin.get_readonly_fields(request, obj) or []
     )
@@ -242,7 +241,7 @@ class MassAdmin(admin.ModelAdmin):
                 "exclude": get_exclude_fields(self, request, obj, extra_exclude)
             }
         )
-    
+
     def get_formsets_with_inlines(self, request, obj=None):
         """"""
         if not getattr(self.admin_obj, "massadmin_inline_safe", False):
@@ -292,7 +291,7 @@ class MassAdmin(admin.ModelAdmin):
             else:
                 for obj_form in forms:
                     obj_form.save()
-        
+
         for (
             inline_instance,
             inline_formsets
@@ -317,11 +316,11 @@ class MassAdmin(admin.ModelAdmin):
                     inline_formset.save()
 
     def mass_change_view(
-            self,
-            request,
-            comma_separated_object_ids,
-            extra_context=None
-        ):
+        self,
+        request,
+        comma_separated_object_ids,
+        extra_context=None
+    ):
         """The 'mass change' admin view for this model."""
         opts = self.model._meta
         app_label = opts.app_label
@@ -378,7 +377,7 @@ class MassAdmin(admin.ModelAdmin):
             ]
 
             is_valid = all(obj_form.is_valid() for obj_form in forms)
-            
+
             for (
                 FormSet,
                 inline_instance
@@ -409,7 +408,7 @@ class MassAdmin(admin.ModelAdmin):
                     post_inline_instances,
                     mass_changes
                 )
-                
+
                 # Log change message corresponding to `obj`
                 change_message = self.construct_change_message(
                     request,
@@ -430,7 +429,7 @@ class MassAdmin(admin.ModelAdmin):
                 )
                 form._errors = obj_form._errors
                 formsets = [obj_formsets[0] for obj_formsets in formsets]
-                
+
                 messages.error(request, "Please correct the errors below.")
 
         # Pass first object as `instance` if `GET` request
@@ -501,4 +500,3 @@ class MassEditMixin:
     actions = (
         mass_change_selected,
     )
- 
