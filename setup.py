@@ -1,8 +1,8 @@
 from setuptools import setup, find_packages
 
 setup(
-    name="django-mass-edit",
-    version="3.3.4uhb2dev0",
+    name="autosync-django-mass-edit",
+    version="3.4.1-1",
     author="David Burke",
     author_email="david@burkesoftware.com",
     description=("Make bulk changes in the Django admin interface"),
