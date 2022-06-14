@@ -4,3 +4,6 @@ django_mass_edit.egg-info
 .idea
 .coverage
 .tox
+/build/
+/dist/
+/*.egg-info/
