@@ -114,8 +114,3 @@ When you make a pull request - please include a unit test.
 If you want to take on improving the project let me know by opening an issue.
 
 New maintainers welcome. I (bufke) will only be providing minimal support to keep the project running on modern versions of Django. Open an issue if you are interested.
-
-## UH Maintainers
-
-* [Danial Malik](https://github.com/danialmalik)
-* [Omar Espana](https://github.com/Chamartin3)
