@@ -85,7 +85,7 @@ def get_mass_change_redirect_url(model_meta, pk_list, session):
         session.save()
         object_ids = hash_id
     redirect_url = reverse(
-        "massadmin_change_view",
+        "async_massadmin_change_view",
         kwargs={"app_name": model_meta.app_label,
                 "model_name": model_meta.model_name,
                 "object_ids": object_ids})
@@ -95,15 +95,15 @@ def get_mass_change_redirect_url(model_meta, pk_list, session):
 mass_change_selected.short_description = _('Mass Edit')
 
 
-def mass_change_view(request, app_name, model_name, object_ids, admin_site=None):
+def async_mass_change_view(request, app_name, model_name, object_ids, admin_site=None):
     if object_ids.startswith("session-"):
         object_ids = request.session.get(object_ids)
     model = get_model(app_name, model_name)
-    ma = MassAdmin(model, admin_site or admin.site)
-    return ma.mass_change_view(request, object_ids)
+    ma = AsyncMassAdmin(model, admin_site or admin.site)
+    return ma.async_mass_change_view(request, object_ids)
 
 
-mass_change_view = staff_member_required(mass_change_view)
+async_mass_change_view = staff_member_required(async_mass_change_view)
 
 
 def get_formsets(model, request, obj=None):
@@ -113,7 +113,7 @@ def get_formsets(model, request, obj=None):
         return model.get_formsets(request, obj)
 
 
-class MassAdmin(admin.ModelAdmin):
+class AsyncMassAdmin(admin.ModelAdmin):
 
     mass_change_form_template = None
 
@@ -127,7 +127,7 @@ class MassAdmin(admin.ModelAdmin):
             if not varname.startswith('_') and not isinstance(var, types.FunctionType):
                 self.__dict__[varname] = var
 
-        super(MassAdmin, self).__init__(model, admin_site)
+        super(AsyncMassAdmin, self).__init__(model, admin_site)
 
     def get_overrided_properties(self):
         """
@@ -202,7 +202,7 @@ class MassAdmin(admin.ModelAdmin):
                 "admin/mass_change_form.html"],
             context)
 
-    def mass_change_view(
+    def async_mass_change_view(
         self,
         request,
         comma_separated_object_ids,
@@ -311,7 +311,7 @@ class MassAdmin(admin.ModelAdmin):
         )
 
 
-class MassEditMixin:
+class AsyncMassEditMixin:
     actions = (
         mass_change_selected,
     )
