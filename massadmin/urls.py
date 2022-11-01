@@ -10,7 +10,7 @@ urlpatterns = [
         name='massadmin_change_view',
     ),
     path(
-        '<str:app_name>/<str:model_name>-async-masschange/<str:object_ids>/',
+        '<str:app_name>/<str:model_name>-async_masschange/<str:object_ids>/',
         async_mass_change_view,
         name='async_massadmin_change_view',
     ),

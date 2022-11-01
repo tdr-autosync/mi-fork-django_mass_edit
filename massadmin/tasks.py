@@ -30,9 +30,78 @@ def get_formsets(model, request, obj=None):
     except AttributeError:
         return model.get_formsets(request, obj)
 
+try:  # Django>=1.9
+    from django.apps import apps
+    get_model = apps.get_model
+except ImportError:
+    from django.db.models import get_model
+
+
+# Turns out I might be able to create a fake request object containing just a user object
+# Maybe this will allow for a swift transition, and let me do the thing quicker
+
+# request.__dict__ dumps the request into a json file, maybe it will be enough?
+
+class MassAdminAdminModel(admin.ModelAdmin):
+    def get_form(self, request, obj=None, change=False, **kwargs):
+        """
+        Return a Form class for use in the admin add view. This is used by
+        add_view and change_view.
+        """
+        if "fields" in kwargs:
+            fields = kwargs.pop("fields")
+        else:
+            fields = flatten_fieldsets(self.get_fieldsets(request, obj))
+        excluded = self.get_exclude(request, obj)
+        exclude = [] if excluded is None else list(excluded)
+        readonly_fields = self.get_readonly_fields(request, obj)
+        exclude.extend(readonly_fields)
+        # Exclude all fields if it's a change form and the user doesn't have
+        # the change permission.
+        if (
+            change
+            and hasattr(request, "user")
+            and not self.has_change_permission(request, obj)
+        ):
+            exclude.extend(fields)
+        if excluded is None and hasattr(self.form, "_meta") and self.form._meta.exclude:
+            # Take the custom ModelForm's Meta.exclude into account only if the
+            # ModelAdmin doesn't define its own.
+            exclude.extend(self.form._meta.exclude)
+        # if exclude is an empty list we pass None to be consistent with the
+        # default on modelform_factory
+        exclude = exclude or None
+
+        # Remove declared form fields which are in readonly_fields.
+        new_attrs = dict.fromkeys(
+            f for f in readonly_fields if f in self.form.declared_fields
+        )
+        form = type(self.form.__name__, (self.form,), new_attrs)
+
+        defaults = {
+            "form": form,
+            "fields": fields,
+            "exclude": exclude,
+            "formfield_callback": partial(self.formfield_for_dbfield, request=request),
+            **kwargs,
+        }
+
+        if defaults["fields"] is None and not modelform_defines_fields(
+            defaults["form"]
+        ):
+            defaults["fields"] = forms.ALL_FIELDS
+
+        try:
+            return modelform_factory(self.model, **defaults)
+        except FieldError as e:
+            raise FieldError(
+                "%s. Check fields/fieldsets/exclude attributes of class %s."
+                % (e, self.__class__.__name__)
+            )
+
 
 @shared_task()
-def mass_edit(comma_separated_object_ids, serialized_queryset, post, files, mass_changes_fields, admin_site_name):
+def mass_edit(request, comma_separated_object_ids, app_name, model_name, post, files, mass_changes_fields, admin_site_name):
     """
     Edits queryset asynchronously.
 
@@ -48,8 +117,7 @@ def mass_edit(comma_separated_object_ids, serialized_queryset, post, files, mass
     object_id = object_ids[0]
     formsets = []
 
-    model = serialized_queryset[0]["model"].split(".")
-    model = apps.get_model(model[0], model[1])
+    model = get_model(app_name, model_name)
     queryset = model.objects.all()
 
     obj = queryset.get(pk=unquote(object_id))
@@ -59,7 +127,7 @@ def mass_edit(comma_separated_object_ids, serialized_queryset, post, files, mass
 
     admin_model = admin.ModelAdmin(model, admin_site)
 
-    ModelForm = admin_model.get_form(None, obj)
+    ModelForm = admin_model.get_form(request, obj)
 
     try:
         with transaction.atomic():
@@ -96,7 +164,7 @@ def mass_edit(comma_separated_object_ids, serialized_queryset, post, files, mass
                 prefixes = {}
 
                 # Adds a prefix to all formsets
-                for FormSet in get_formsets(admin_model, None, new_object): #request
+                for FormSet in get_formsets(admin_model, request, new_object): #request
                     prefix = FormSet.get_default_prefix()
                     prefixes[prefix] = prefixes.get(prefix, 0) + 1
                     if prefixes[prefix] != 1:

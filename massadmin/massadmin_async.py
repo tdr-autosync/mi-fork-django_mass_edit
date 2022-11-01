@@ -98,8 +98,9 @@ mass_change_selected.short_description = _('Mass Edit')
 def async_mass_change_view(request, app_name, model_name, object_ids, admin_site=None):
     if object_ids.startswith("session-"):
         object_ids = request.session.get(object_ids)
-    model = get_model(app_name, model_name)
-    ma = AsyncMassAdmin(model, admin_site or admin.site)
+    # Here is the model to send to celery!!!!
+    # Try using admin_site too so we don't have to do this weird stuff
+    ma = AsyncMassAdmin(app_name, model_name, admin_site or admin.site,)
     return ma.async_mass_change_view(request, object_ids)
 
 
@@ -117,7 +118,12 @@ class AsyncMassAdmin(admin.ModelAdmin):
 
     mass_change_form_template = None
 
-    def __init__(self, model, admin_site):
+    def __init__(self, app_name, model_name, admin_site):
+        self.app_name = app_name
+        self.model_name = model_name
+
+        model = get_model(app_name, model_name)
+
         try:
             self.admin_obj = admin_site._registry[model]
         except KeyError:
@@ -247,8 +253,9 @@ class AsyncMassAdmin(admin.ModelAdmin):
 
         if request.method == 'POST':
             tasks.mass_edit.delay(
+                request.__dict__,
                 comma_separated_object_ids,
-                serializers.serialize('json', queryset[:1]),
+                self.app_name, self.model_name,
                 request.POST,
                 request.FILES,
                 mass_changes_fields,
