@@ -63,7 +63,7 @@ from . import settings
 from . import tasks
 
 from django.core import serializers
-
+import json
 
 def mass_change_selected(modeladmin, request, queryset):
     selected = queryset.values_list('pk', flat=True)
@@ -113,6 +113,37 @@ def get_formsets(model, request, obj=None):
     except AttributeError:
         return model.get_formsets(request, obj)
 
+
+def _finditem(obj, key):
+    a = []
+    for k, v in obj.items():
+        if isinstance(v, dict):
+            a.append({k: _finditem(v, key)}) 
+        if isinstance(v, key):
+            a.append(k)
+    
+    return a
+
+# To be rewritten
+def remove_nonserializable_objects(obj, recursion=0):
+    if recursion > 10:
+        return None
+    
+    a = {}
+
+    for k, v in obj.items():
+        if isinstance(v, dict):
+            a[k] = remove_nonserializable_objects({k: v}, recursion + 1)
+
+        else:
+            try:
+                json.dumps({k: v})
+
+                a[k] = v
+            except:
+                a[k] = None
+    
+    return a
 
 class AsyncMassAdmin(admin.ModelAdmin):
 
@@ -252,12 +283,24 @@ class AsyncMassAdmin(admin.ModelAdmin):
         mass_changes_fields = request.POST.getlist("_mass_change")
 
         if request.method == 'POST':
+            # r = request.__dict__
+            # del r["META"]["wsgi.input"]
+            # del r["META"]["wsgi.errors"]
+            # del r["META"]["wsgi.file_wrapper"]
+            # del r["environ"]["wsgi.file_wrapper"]
+
+            # print(_finditem(r, 'dict'))
+
+            r = remove_nonserializable_objects(request.__dict__)
+
+            r["POST"] = request.POST
+            r["FILES"] = request.FILES
+
             tasks.mass_edit.delay(
-                request.__dict__,
+                json.dumps(r),
                 comma_separated_object_ids,
                 self.app_name, self.model_name,
-                request.POST,
-                request.FILES,
+                serializers.serialize('json', queryset[:1]),
                 mass_changes_fields,
                 self.admin_site.name
             )
