@@ -182,7 +182,11 @@ def mass_edit(request, comma_separated_object_ids, app_name, model_name, seriali
                     formsets.append(formset)
 
             if all_valid(formsets) and form_validated:
-                new_object.save()
+                admin_model.save_model(
+                    request,
+                    new_object,
+                    form,
+                    change=True)
                 form.save_m2m()
                 for formset in formsets:
                     formset.save()
