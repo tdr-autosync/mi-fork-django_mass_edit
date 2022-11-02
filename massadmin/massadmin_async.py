@@ -1,34 +1,4 @@
-# Updates by David Burke <david@burkesoftware.com>
-# Original code is at
-# http://algoholic.eu/django-mass-change-admin-site-extension/
-"""
-Copyright (c) 2010, Stanislaw Adaszewski
-All rights reserved.
-
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are met:
-    * Redistributions of source code must retain the above copyright
-      notice, this list of conditions and the following disclaimer.
-    * Redistributions in binary form must reproduce the above copyright
-      notice, this list of conditions and the following disclaimer in the
-      documentation and/or other materials provided with the distribution.
-    * Neither the name of Stanislaw Adaszewski nor the
-      names of any contributors may be used to endorse or promote products
-      derived from this software without specific prior written permission.
-
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
-ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-DISCLAIMED. IN NO EVENT SHALL Stanislaw Adaszewski BE LIABLE FOR ANY
-DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
-(INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
-LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
-ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
-SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-"""
 import hashlib
-import types
 
 from django.contrib import admin
 from django.core.exceptions import PermissionDenied
@@ -55,12 +25,13 @@ from django.utils.safestring import mark_safe
 from django.contrib.admin.views.decorators import staff_member_required
 from django.http import Http404, HttpResponseRedirect
 from django.utils.html import escape
-from django.shortcuts import render
+# from django.shortcuts import render
 from django.contrib.admin.templatetags.admin_urls import add_preserved_filters
 
 from . import settings
 
 from . import tasks
+from . import massadmin
 
 from django.core import serializers
 import json
@@ -107,23 +78,6 @@ def async_mass_change_view(request, app_name, model_name, object_ids, admin_site
 async_mass_change_view = staff_member_required(async_mass_change_view)
 
 
-def get_formsets(model, request, obj=None):
-    try:  # Django>=1.9
-        return [f for f, _ in model.get_formsets_with_inlines(request, obj)]
-    except AttributeError:
-        return model.get_formsets(request, obj)
-
-
-def _finditem(obj, key):
-    a = []
-    for k, v in obj.items():
-        if isinstance(v, dict):
-            a.append({k: _finditem(v, key)}) 
-        if isinstance(v, key):
-            a.append(k)
-    
-    return a
-
 # To be rewritten
 def remove_nonserializable_objects(obj, recursion=0):
     if recursion > 10:
@@ -145,99 +99,18 @@ def remove_nonserializable_objects(obj, recursion=0):
     
     return a
 
-class AsyncMassAdmin(admin.ModelAdmin):
+
+class AsyncMassAdmin(massadmin.MassAdmin):
 
     mass_change_form_template = None
 
-    def __init__(self, app_name, model_name, admin_site):
+    def __init__(self, app_name, model_name, admin_site=None):
         self.app_name = app_name
         self.model_name = model_name
 
         model = get_model(app_name, model_name)
 
-        try:
-            self.admin_obj = admin_site._registry[model]
-        except KeyError:
-            raise Exception('Model not registered with the admin site.')
-
-        for (varname, var) in self.get_overrided_properties().items():
-            if not varname.startswith('_') and not isinstance(var, types.FunctionType):
-                self.__dict__[varname] = var
-
         super(AsyncMassAdmin, self).__init__(model, admin_site)
-
-    def get_overrided_properties(self):
-        """
-        Find all overrided properties, like form, raw_id_fields and so on.
-        """
-        items = {}
-        for cl in self.admin_obj.__class__.mro():
-            if cl is admin.ModelAdmin:
-                break
-            for k, v in cl.__dict__.items():
-                if k not in items:
-                    items[k] = v
-        return items
-
-    def response_change(self, request, obj):
-        """
-        Determines the HttpResponse for the change_view stage.
-        """
-        opts = obj._meta
-
-        msg = _('Selected %(name)s were changed successfully.') % {
-            'name': force_str(
-                opts.verbose_name_plural),
-            'obj': force_str(obj)}
-
-        self.message_user(request, msg)
-        redirect_url = reverse('{}:{}_{}_changelist'.format(
-            self.admin_site.name,
-            self.model._meta.app_label,
-            self.model._meta.model_name,
-        ))
-        preserved_filters = self.get_preserved_filters(request)
-        redirect_url = add_preserved_filters(
-            {'preserved_filters': preserved_filters, 'opts': opts}, redirect_url)
-        return HttpResponseRedirect(redirect_url)
-
-    def render_mass_change_form(
-            self,
-            request,
-            context,
-            add=False,
-            change=False,
-            form_url='',
-            obj=None):
-        opts = self.model._meta
-        app_label = opts.app_label
-        from django.contrib.contenttypes.models import ContentType
-        context.update({
-            'add': add,
-            'change': change,
-            'has_add_permission': self.has_add_permission(request),
-            'has_change_permission': self.has_change_permission(request, obj),
-            'has_view_permission': self.has_view_permission(request, obj),
-            'has_delete_permission': self.has_delete_permission(request, obj),
-            'has_file_field': True,
-            'has_absolute_url': hasattr(self.model, 'get_absolute_url'),
-            'form_url': mark_safe(form_url),
-            'opts': opts,
-            'content_type_id': ContentType.objects.get_for_model(self.model).id,
-            'save_as': self.save_as,
-            'save_on_top': self.save_on_top,
-        })
-        request.current_app = self.admin_site.name
-        return render(
-            request,
-            self.mass_change_form_template or [
-                "admin/%s/%s/mass_change_form.html" %
-                (app_label,
-                 opts.object_name.lower()),
-                "admin/%s/mass_change_form.html" %
-                app_label,
-                "admin/mass_change_form.html"],
-            context)
 
     def async_mass_change_view(
         self,
@@ -283,14 +156,6 @@ class AsyncMassAdmin(admin.ModelAdmin):
         mass_changes_fields = request.POST.getlist("_mass_change")
 
         if request.method == 'POST':
-            # r = request.__dict__
-            # del r["META"]["wsgi.input"]
-            # del r["META"]["wsgi.errors"]
-            # del r["META"]["wsgi.file_wrapper"]
-            # del r["environ"]["wsgi.file_wrapper"]
-
-            # print(_finditem(r, 'dict'))
-
             r = remove_nonserializable_objects(request.__dict__)
 
             r["POST"] = request.POST
@@ -299,16 +164,16 @@ class AsyncMassAdmin(admin.ModelAdmin):
             tasks.mass_edit.delay(
                 json.dumps(r),
                 comma_separated_object_ids,
-                self.app_name, self.model_name,
+                self.app_name,
+                self.model_name,
                 serializers.serialize('json', queryset[:1]),
-                mass_changes_fields,
-                self.admin_site.name
+                mass_changes_fields
             )
         
         form = ModelForm(instance=obj)
         form._errors = errors
         prefixes = {}
-        for FormSet in get_formsets(self, request, obj):
+        for FormSet in massadmin.get_formsets(self, request, obj):
             prefix = FormSet.get_default_prefix()
             prefixes[prefix] = prefixes.get(prefix, 0) + 1
             if prefixes[prefix] != 1:
