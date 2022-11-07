@@ -141,8 +141,9 @@ class AsyncMassAdmin(massadmin.MassAdmin):
 
             try: 
                 with transaction.atomic():
-                    temp_object = queryset.filter(pk__in=[object_id])\
-                        .update(**data).first().save()
+                    temp_object = queryset.filter(pk__in=[object_id])
+                    temp_object.update(**data)
+                    temp_object.first().save()
 
                     tasks.mass_edit2.delay(
                         comma_separated_object_ids,
@@ -152,7 +153,7 @@ class AsyncMassAdmin(massadmin.MassAdmin):
                         object_id,
                     )
 
-                    return self.response_change(request, temp_object)
+                    return self.response_change(request, temp_object.first())
             
             except:
                 general_error = sys.exc_info()[1]
