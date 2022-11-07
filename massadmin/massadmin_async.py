@@ -137,16 +137,21 @@ class AsyncMassAdmin(massadmin.MassAdmin):
             data = {}
 
             try:
+                fields_to_load = []
+
                 for mass_change_field in request.POST.getlist("_mass_change"):
                     if mass_change_field in request.POST:
                         data[mass_change_field] = request.POST[mass_change_field]
                     elif mass_change_field in request.FILES:
                         data[mass_change_field] = request.FILES[mass_change_field]
+                        fields_to_load.append(mass_change_field)
                     else:
                         raise ValueError("Missing data")
 
                 with transaction.atomic():
                     temp_object = queryset.filter(pk__in=[object_id])
+                    for file_field in fields_to_load:
+                        data[file_field].open()
                     temp_object.update(**data)
                     temp_object.first().save()
 
