@@ -3,7 +3,6 @@ This module contains celery tasks for massadmin
 """
 from django.core.exceptions import ValidationError
 
-# from django.contrib import admin
 from django.db import transaction
 from django.contrib.admin import helpers
 from django.forms.formsets import all_valid
@@ -18,7 +17,7 @@ from celery.utils.log import get_task_logger
 import json
 from django.apps import apps
 
-# from uh_core.admin_access.admin_site import BaseAdminSite
+from uh_core.admin_access.admin_site import BaseAdminSite
 
 try:  # Django>=1.9
     from django.apps import apps
@@ -32,7 +31,7 @@ from . import massadmin_async
 logger = get_task_logger(__name__)
 
 @shared_task()
-def mass_edit(request, comma_separated_object_ids, app_name, model_name, serialized_queryset, mass_changes_fields):
+def mass_edit(request, comma_separated_object_ids, app_name, model_name, serialized_queryset, mass_changes_fields, admin_site_name):
     """
     Edits queryset asynchronously.
 
@@ -42,6 +41,7 @@ def mass_edit(request, comma_separated_object_ids, app_name, model_name, seriali
     model_name                  - Model name for model
     serialized_queryset         - Queryset Turned into json
     mass_changes_fields         - Fields selected for mass change
+    admin_site_name             - Admin site name
     """
 
     request = json.loads(request)
@@ -57,9 +57,9 @@ def mass_edit(request, comma_separated_object_ids, app_name, model_name, seriali
     obj = queryset.get(pk=unquote(object_id))
     errors, errors_list = None, None
 
-    # admin_site = BaseAdminSite(name=admin_site_name)
+    admin_site = BaseAdminSite(name=admin_site_name)
 
-    admin_model = massadmin_async.AsyncMassAdmin(app_name, model_name)
+    admin_model = massadmin_async.AsyncMassAdmin(app_name, model_name, admin_site)
 
     ModelForm = admin_model.get_form(request, obj)
     
@@ -135,3 +135,34 @@ def mass_edit(request, comma_separated_object_ids, app_name, model_name, seriali
 
     except Exception as e:
         logger.error(e)
+
+@shared_task()
+def mass_edit2(comma_separated_object_ids, app_name, model_name, mass_changes_fields, temp_object_id):
+    """
+    Edits queryset asynchronously.
+
+    comma_separated_object_ids  - Object ids
+    app_name                    - App name for model
+    model_name                  - Model name for model
+    mass_changes_fields         - Fields selected for mass change
+    temp_object_id              - Temporary object id
+    """
+
+    object_ids = comma_separated_object_ids.split(',')
+    object_ids.remove(temp_object_id)
+
+    model = get_model(app_name, model_name)
+    queryset = model.objects.all()
+
+    temp_object = queryset.get(pk=unquote(temp_object_id))
+
+    temp_data = {}
+
+    for field in mass_changes_fields:
+        temp_data[field] = getattr(temp_object, field)
+
+    items = queryset.filter(pk__in=object_ids)
+    items.update(**temp_data)
+
+    for item in items:
+        item.save()
