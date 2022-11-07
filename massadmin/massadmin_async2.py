@@ -105,6 +105,7 @@ class AsyncMassAdmin(massadmin.MassAdmin):
         ):
         """The 'mass change' admin view for this model."""
         opts = self.model._meta
+        general_error = None
 
         queryset = getattr(
             self.admin_obj,
