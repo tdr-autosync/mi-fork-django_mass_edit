@@ -136,37 +136,37 @@ class AsyncMassAdmin(massadmin.MassAdmin):
         if request.method == 'POST':
             data = {}
 
-            try:
-                fields_to_load = []
+            # try:
+            fields_to_load = []
 
-                for mass_change_field in request.POST.getlist("_mass_change"):
-                    if mass_change_field in request.POST:
-                        data[mass_change_field] = request.POST[mass_change_field]
-                    elif mass_change_field in request.FILES:
-                        data[mass_change_field] = request.FILES[mass_change_field]
-                        fields_to_load.append(mass_change_field)
-                    else:
-                        raise ValueError("Missing data")
+            for mass_change_field in request.POST.getlist("_mass_change"):
+                if mass_change_field in request.POST:
+                    data[mass_change_field] = request.POST[mass_change_field]
+                elif mass_change_field in request.FILES:
+                    data[mass_change_field] = request.FILES[mass_change_field]
+                    fields_to_load.append(mass_change_field)
+                else:
+                    raise ValueError("Missing data")
 
-                with transaction.atomic():
-                    temp_object = queryset.filter(pk__in=[object_id])
-                    for file_field in fields_to_load:
-                        data[file_field].open()
-                    temp_object.update(**data)
-                    temp_object.first().save()
+            with transaction.atomic():
+                temp_object = queryset.filter(pk__in=[object_id])
+                for file_field in fields_to_load:
+                    data[file_field].open()
+                temp_object.update(**data)
+                temp_object.first().save()
 
-                tasks.mass_edit2.delay(
-                    comma_separated_object_ids,
-                    self.app_name,
-                    self.model_name,
-                    mass_changes_fields,
-                    object_id,
-                )
+            tasks.mass_edit2.delay(
+                comma_separated_object_ids,
+                self.app_name,
+                self.model_name,
+                mass_changes_fields,
+                object_id,
+            )
 
-                return self.response_change(request, temp_object.first())
-            
-            except:
-                general_error = sys.exc_info()[1]
+            return self.response_change(request, temp_object.first())
+        
+            # except:
+            #     general_error = sys.exc_info()[1]
             
         ModelForm = self.get_form(request, obj)
         prefixes = {}
