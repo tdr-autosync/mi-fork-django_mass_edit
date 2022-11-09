@@ -34,6 +34,9 @@ from . import settings
 from . import tasks
 from . import massadmin
 import sys
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def mass_change_selected(modeladmin, request, queryset):
@@ -143,6 +146,7 @@ class AsyncMassAdmin(massadmin.MassAdmin):
                 if mass_change_field in request.POST:
                     data[mass_change_field] = request.POST[mass_change_field]
                 elif mass_change_field in request.FILES:
+                    logger.debug(request.FILES[mass_change_field])
                     data[mass_change_field] = request.FILES[mass_change_field]
                     fields_to_load.append(mass_change_field)
                 else:
