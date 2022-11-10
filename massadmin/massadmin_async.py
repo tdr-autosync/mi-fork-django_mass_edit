@@ -79,13 +79,6 @@ def async_mass_change_view(request, app_name, model_name, object_ids, admin_site
 async_mass_change_view = staff_member_required(async_mass_change_view)
 
 
-def get_formsets(model, request, obj=None):
-    try:  # Django>=1.9
-        return [f for f, _ in model.get_formsets_with_inlines(request, obj)]
-    except AttributeError:
-        return model.get_formsets(request, obj)
-
-
 class AsyncMassAdmin(massadmin.MassAdmin):
 
     mass_change_form_template = None
@@ -166,7 +159,7 @@ class AsyncMassAdmin(massadmin.MassAdmin):
             
         ModelForm = self.get_form(request, obj)
         prefixes = {}
-        for FormSet in get_formsets(self, request, obj):
+        for FormSet in massadmin.get_formsets(self, request, obj):
             prefix = FormSet.get_default_prefix()
             prefixes[prefix] = prefixes.get(prefix, 0) + 1
             if prefixes[prefix] != 1:
