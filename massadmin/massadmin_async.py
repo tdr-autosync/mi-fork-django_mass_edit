@@ -138,22 +138,18 @@ class AsyncMassAdmin(massadmin.MassAdmin):
             data = {}
 
             try:
-                fields_to_load = []
-
                 for mass_change_field in request.POST.getlist("_mass_change"):
                     if mass_change_field in request.POST:
                         data[mass_change_field] = request.POST[mass_change_field]
                     elif mass_change_field in request.FILES:
-                        logger.debug(request.FILES[mass_change_field])
                         data[mass_change_field] = request.FILES[mass_change_field]
-                        fields_to_load.append(mass_change_field)
                     else:
                         raise ValueError("Missing data")
 
                 with transaction.atomic():
                     queryset.filter(pk__in=[object_id]).update(**data)
 
-                tasks.mass_edit2.delay(
+                tasks.mass_edit.delay(
                     comma_separated_object_ids,
                     self.app_name,
                     self.model_name,
@@ -163,6 +159,8 @@ class AsyncMassAdmin(massadmin.MassAdmin):
 
                 return self.response_change(request, queryset.filter(pk__in=[object_id]).first())
             
+            # We should capture only errors caused by the code, but for now
+            # reusing what was in massadmin.py to not add too much at once
             except:
                 general_error = sys.exc_info()[1]
             
