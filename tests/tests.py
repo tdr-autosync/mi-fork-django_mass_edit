@@ -1,5 +1,5 @@
 from six.moves.urllib import parse
-from django.conf import settings
+from celery import Celery
 from django.contrib.auth.models import User
 from django.contrib import admin
 from django.test import TestCase, override_settings, RequestFactory
@@ -8,7 +8,10 @@ try:
 except ImportError:  # Django<2.0
     from django.core.urlresolvers import reverse
 from massadmin.massadmin import MassAdmin, get_mass_change_redirect_url
-from massadmin.massadmin_async import AsyncMassAdmin, get_mass_change_redirect_url as async_get_mass_change_redirect_url
+from massadmin.massadmin_async import (
+    AsyncMassAdmin,
+    get_mass_change_redirect_url as async_get_mass_change_redirect_url
+)
 
 from .admin import CustomAdminForm, BaseAdmin, InheritedAdmin
 from .models import (
@@ -20,8 +23,8 @@ from .models import (
 from .site import CustomAdminSite
 from .mocks import MockRenderMassAdmin
 
-
-setattr(settings, 'CELERY_ALWAYS_EAGER', True)
+app = Celery("tier3")
+app.conf.task_always_eager = True
 
 
 def get_massadmin_url(objects, session):
