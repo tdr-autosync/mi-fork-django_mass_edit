@@ -96,7 +96,7 @@ class AsyncMassAdmin(massadmin.MassAdmin):
             request,
             comma_separated_object_ids,
             extra_context=None
-        ):
+    ):
         """The 'mass change' admin view for this model."""
         opts = self.model._meta
         general_error = None
