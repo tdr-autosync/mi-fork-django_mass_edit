@@ -151,12 +151,12 @@ class AsyncMassAdmin(massadmin.MassAdmin):
                 )
 
                 return self.response_change(request, queryset.filter(pk__in=[object_id]).first())
-            
+
             # We should capture only errors caused by the code, but for now
             # reusing what was in massadmin.py to not add too much at once
-            except:
+            except Exception:
                 general_error = sys.exc_info()[1]
-            
+
         ModelForm = self.get_form(request, obj)
         prefixes = {}
         for FormSet in massadmin.get_formsets(self, request, obj):
