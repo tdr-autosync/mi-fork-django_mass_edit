@@ -331,7 +331,7 @@ class AsyncCustomizationTestCase(TestCase):
         """
         from django.apps import apps
         models = apps.get_models()
-        ma = AsyncMassAdmin(models, str(CustomAdminModel.name), admin.site)
+        ma = AsyncMassAdmin(models[0], str(CustomAdminModel.name), admin.site)
         self.assertEqual(ma.form, CustomAdminForm)
 
     # Needs fix
