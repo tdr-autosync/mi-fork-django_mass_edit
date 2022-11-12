@@ -329,7 +329,9 @@ class AsyncCustomizationTestCase(TestCase):
         """ If form is overridden in ModelAdmin, it should be overridden in
         AsyncMassAdmin too.
         """
-        ma = AsyncMassAdmin("myadmin", str(CustomAdminModel.name), admin.site)
+        from django.apps import apps
+        models = apps.get_models()
+        ma = AsyncMassAdmin(models, str(CustomAdminModel.name), admin.site)
         self.assertEqual(ma.form, CustomAdminForm)
 
     # Needs fix
