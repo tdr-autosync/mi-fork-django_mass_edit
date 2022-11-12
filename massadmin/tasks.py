@@ -42,6 +42,9 @@ def mass_edit(object_ids, app_name, model_name, mass_changes_fields, temp_object
     for field in mass_changes_fields:
         temp_data[field] = getattr(temp_object, field)
 
+    # Maybe we should split the atomic transaction into multiple requests, to not block the database
+    # It is a simple query but the impact might be big
+
     # Atomic's exception should be handled, but until we figure
     # out the tier3 mailing
     with transaction.atomic():

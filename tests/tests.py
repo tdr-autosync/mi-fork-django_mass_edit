@@ -273,7 +273,8 @@ class AsyncAdminViewTest(TestCase):
                                     {"_mass_change": "name", "name": "new name"})
         # we are redirected to changelist with filters
         self.assertRedirects(response, changelist_url)
-
+    
+    # Needs fix
     def test_invalid_form(self):
         """ Save nothing if some forms are invalid
         """
@@ -323,18 +324,20 @@ class AsyncCustomizationTestCase(TestCase):
             'temporary', 'temporary@gmail.com', 'temporary')
         self.factory = RequestFactory()
 
+    # Needs fix
     def test_custom_from(self):
         """ If form is overridden in ModelAdmin, it should be overridden in
         AsyncMassAdmin too.
         """
-        ma = AsyncMassAdmin(str(CustomAdminModel._meta.app_label), str(CustomAdminModel.name), admin.site)
+        ma = AsyncMassAdmin("myadmin", str(CustomAdminModel.name), admin.site)
         self.assertEqual(ma.form, CustomAdminForm)
 
+    # Needs fix
     def test_inheritance(self):
         """ If modeladmin is inherited from another customized modeladmin,
         AsyncMassAdmin get overriding from all of them.
         """
-        ma = AsyncMassAdmin(str(CustomAdminModel._meta.app_label), str(CustomAdminModel.name), admin.site)
+        ma = AsyncMassAdmin("myadmin", str(CustomAdminModel.name), admin.site)
         self.assertEqual(ma.raw_id_fields, InheritedAdmin.raw_id_fields)
         self.assertEqual(ma.readonly_fields, BaseAdmin.readonly_fields)
 
