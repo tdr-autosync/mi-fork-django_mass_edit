@@ -329,7 +329,7 @@ class AsyncCustomizationTestCase(TestCase):
         """ If form is overridden in ModelAdmin, it should be overridden in
         AsyncMassAdmin too.
         """
-        ma = AsyncMassAdmin("tests", str(CustomAdminModel.name), admin.site)
+        ma = AsyncMassAdmin("tests", str(CustomAdminModel), admin.site)
         self.assertEqual(ma.form, CustomAdminForm)
 
     # Needs fix
@@ -337,7 +337,7 @@ class AsyncCustomizationTestCase(TestCase):
         """ If modeladmin is inherited from another customized modeladmin,
         AsyncMassAdmin get overriding from all of them.
         """
-        ma = AsyncMassAdmin("tests", str(CustomAdminModel.name), admin.site)
+        ma = AsyncMassAdmin("tests", str(CustomAdminModel), admin.site)
         self.assertEqual(ma.raw_id_fields, InheritedAdmin.raw_id_fields)
         self.assertEqual(ma.readonly_fields, BaseAdmin.readonly_fields)
 
