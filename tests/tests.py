@@ -273,7 +273,7 @@ class AsyncAdminViewTest(TestCase):
                                     {"_mass_change": "name", "name": "new name"})
         # we are redirected to changelist with filters
         self.assertRedirects(response, changelist_url)
-    
+
     def test_invalid_form(self):
         """ Save nothing if some forms are invalid
         """
