@@ -131,54 +131,69 @@ class AsyncMassAdmin(massadmin.MassAdmin):
         if request.method == 'POST':
             data = {}
 
-            # try:
-            for mass_change_field in request.POST.getlist("_mass_change"):
-                if mass_change_field in request.POST:
-                    data[mass_change_field] = request.POST[mass_change_field]
-                elif mass_change_field in request.FILES:
-                    data[mass_change_field] = request.FILES[mass_change_field]
-                else:
-                    raise ValueError("Missing data")
+            try:
+                for mass_change_field in request.POST.getlist("_mass_change"):
+                    if mass_change_field in request.POST:
+                        data[mass_change_field] = request.POST[mass_change_field]
+                    elif mass_change_field in request.FILES:
+                        data[mass_change_field] = request.FILES[mass_change_field]
+                    else:
+                        raise ValueError("Missing data")
 
-            # Most intensive part
-            # After testing I estimate that each 10k items take around 1s of processing
-            # assumming server having a great day and full capability,
-            # so we're limited to about 200k - 250k items edited at a time,
-            # so all other functions can occur before timeout.
+                # Most intensive part
+                # After testing I estimate that each 10k items take around 1s of processing
+                # assumming server having a great day and full capability,
+                # so we're limited to about 200k - 250k items edited at a time,
+                # so all other functions can occur before timeout.
 
-            # Assuming for all server delays we can expect to have around
-            # 100k items edited at a single query without getting errors
+                # Assuming for all server delays we can expect to have around
+                # 100k items edited at a single query without getting errors
 
-            # This statement will be refined with information from squash instance
-            # As test above were conducted locally
-            objects = queryset.filter(pk__in=comma_separated_object_ids.split(','))
-            for object in objects:
-                is_valid = ModelForm(
+                # This statement will be refined with information from squash instance
+                # As test above were conducted locally
+                objects = queryset.filter(pk__in=comma_separated_object_ids.split(','))
+
+                form_fields = ModelForm(
                     request.POST,
                     request.FILES,
-                    instance=object
-                ).is_valid()
+                    instance=objects[0]
+                ).fields
 
-                if not is_valid:
-                    raise ValidationError("Form is not correct")
+                exclude = []
+                for fieldname, field in list(form_fields.items()):
+                    if fieldname not in mass_changes_fields:
+                        exclude.append(fieldname)
 
-            with transaction.atomic():
-                queryset.filter(pk__in=[object_id]).update(**data)
+                for obj in objects:
+                    form = ModelForm(
+                        request.POST,
+                        request.FILES,
+                        instance=obj
+                    )
+                    
+                    for exclude_fieldname in exclude:
+                        del form.fields[exclude_fieldname]
 
-            tasks.mass_edit.delay(
-                comma_separated_object_ids,
-                self.app_name,
-                self.model_name,
-                mass_changes_fields,
-                object_id,
-            )
+                    if not form.is_valid():
+                        raise ValidationError("Form is not correct")
 
-            return self.response_change(request, queryset.filter(pk__in=[object_id]).first())
+                with transaction.atomic():
+                    queryset.filter(pk__in=[object_id]).update(**data)
+
+                tasks.mass_edit.delay(
+                    comma_separated_object_ids,
+                    self.app_name,
+                    self.model_name,
+                    mass_changes_fields,
+                    object_id,
+                )
+
+                return self.response_change(request, queryset.filter(pk__in=[object_id]).first())
 
             # We should capture only errors caused by the code, but for now
             # reusing what was in massadmin.py to not add too much at once
-            # except Exception:
-            #     general_error = sys.exc_info()[1]
+            except Exception:
+                general_error = sys.exc_info()[1]
 
         prefixes = {}
         for FormSet in massadmin.get_formsets(self, request, obj):
