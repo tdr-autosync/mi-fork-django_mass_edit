@@ -114,7 +114,6 @@ class AsyncMassAdmin(massadmin.MassAdmin):
         except self.model.DoesNotExist:
             obj = None
 
-        # TODO It's necessary to check permission and existence for all object
         if not self.has_change_permission(request, obj):
             raise PermissionDenied
 

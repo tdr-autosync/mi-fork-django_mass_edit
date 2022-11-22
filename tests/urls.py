@@ -5,6 +5,5 @@ admin.autodiscover()
 
 urlpatterns = [
     path('admin/', include(massadmin_urls)),
-    path('admin/', include(massadmin_urls)),
     path('admin/', admin.site.urls),
 ]
