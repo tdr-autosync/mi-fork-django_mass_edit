@@ -103,12 +103,14 @@ class ImprovedMassAdmin(massadmin.MassAdmin):
         return data
 
     def validate_form(self, request, ModelForm, mass_changes_fields, obj, data):
+        # Only one form needs to be validated, as the same fields are being used
+        # for all objects, and form only checks edited fields, other cases are being
+        # checked during update
         form = ModelForm(
             request.POST,
             request.FILES,
             instance=obj
         )
-
         for fieldname, field in list(form.fields.items()):
             if fieldname not in mass_changes_fields:
                 del form.fields[fieldname]
@@ -161,9 +163,6 @@ class ImprovedMassAdmin(massadmin.MassAdmin):
             try:
                 data = self.get_mass_change_data(request)
 
-                # Only one form needs to be validated, as the same fields are being used
-                # for all objects, and form only checks edited fields, other cases are being
-                # checked during update
                 self.validate_form(request, ModelForm, mass_changes_fields, obj, data)
 
                 # In case of errors Atomic will rollback whole transaction 
