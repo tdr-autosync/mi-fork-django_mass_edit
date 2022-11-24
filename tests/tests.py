@@ -1,5 +1,4 @@
 from six.moves.urllib import parse
-from celery import Celery
 from django.contrib.auth.models import User
 from django.contrib import admin
 from django.test import TestCase, override_settings, RequestFactory
@@ -8,8 +7,8 @@ try:
 except ImportError:  # Django<2.0
     from django.core.urlresolvers import reverse
 from massadmin.massadmin import MassAdmin, get_mass_change_redirect_url
-from massadmin.massadmin_async import (
-    AsyncMassAdmin,
+from massadmin.massadmin_improved import (
+    ImprovedMassAdmin,
     get_mass_change_redirect_url as async_get_mass_change_redirect_url
 )
 
@@ -22,9 +21,6 @@ from .models import (
 )
 from .site import CustomAdminSite
 from .mocks import MockRenderMassAdmin
-
-app = Celery("tier3")
-app.conf.task_always_eager = True
 
 
 def get_massadmin_url(objects, session):
@@ -316,7 +312,7 @@ class AsyncAdminViewTest(TestCase):
 
 
 class AsyncCustomizationTestCase(TestCase):
-    """ AsyncMassAdmin has all customized options from related ModelAdmin
+    """ ImprovedMassAdmin has all customized options from related ModelAdmin
     """
     def setUp(self):
         self.user = User.objects.create_superuser(
@@ -325,16 +321,16 @@ class AsyncCustomizationTestCase(TestCase):
 
     def test_custom_from(self):
         """ If form is overridden in ModelAdmin, it should be overridden in
-        AsyncMassAdmin too.
+        ImprovedMassAdmin too.
         """
-        ma = AsyncMassAdmin("tests", "CustomAdminModel", admin.site)
+        ma = ImprovedMassAdmin("tests", "CustomAdminModel", admin.site)
         self.assertEqual(ma.form, CustomAdminForm)
 
     def test_inheritance(self):
         """ If modeladmin is inherited from another customized modeladmin,
-        AsyncMassAdmin get overriding from all of them.
+        ImprovedMassAdmin get overriding from all of them.
         """
-        ma = AsyncMassAdmin("tests", "InheritedAdminModel", admin.site)
+        ma = ImprovedMassAdmin("tests", "InheritedAdminModel", admin.site)
         self.assertEqual(ma.raw_id_fields, InheritedAdmin.raw_id_fields)
         self.assertEqual(ma.readonly_fields, BaseAdmin.readonly_fields)
 

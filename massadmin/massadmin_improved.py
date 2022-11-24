@@ -27,10 +27,8 @@ from django.http import Http404, HttpResponseRedirect
 from django.utils.html import escape
 from django.contrib.admin.templatetags.admin_urls import add_preserved_filters
 from django.db import transaction
-from django.forms.formsets import all_valid
 
 from . import settings
-from . import tasks
 from . import massadmin
 import sys
 
@@ -68,14 +66,14 @@ mass_change_selected.short_description = _('Mass Edit')
 def async_mass_change_view(request, app_name, model_name, object_ids, admin_site=None):
     if object_ids.startswith("session-"):
         object_ids = request.session.get(object_ids)
-    ma = AsyncMassAdmin(app_name, model_name, admin_site or admin.site,)
+    ma = ImprovedMassAdmin(app_name, model_name, admin_site or admin.site,)
     return ma.async_mass_change_view(request, object_ids)
 
 
 async_mass_change_view = staff_member_required(async_mass_change_view)
 
 
-class AsyncMassAdmin(massadmin.MassAdmin):
+class ImprovedMassAdmin(massadmin.MassAdmin):
 
     mass_change_form_template = None
 
@@ -85,9 +83,9 @@ class AsyncMassAdmin(massadmin.MassAdmin):
 
         model = get_model(app_name, model_name)
 
-        super(AsyncMassAdmin, self).__init__(model, admin_site)
+        super(ImprovedMassAdmin, self).__init__(model, admin_site)
 
-    def get_excluded_fields(self, request):
+    def get_mass_change_data(self, request):
         data = {}
 
         for mass_change_field in request.POST.getlist("_mass_change"):
@@ -103,6 +101,29 @@ class AsyncMassAdmin(massadmin.MassAdmin):
                 data[mass_change_field] = False
 
         return data
+
+    def validate_form(self, request, ModelForm, mass_changes_fields, obj, data):
+        form = ModelForm(
+            request.POST,
+            request.FILES,
+            instance=obj
+        )
+
+        for fieldname, field in list(form.fields.items()):
+            if fieldname not in mass_changes_fields:
+                del form.fields[fieldname]
+        
+        # Django might automatically invalidate the field before sending
+        # so we have to catch it in an efficient way, as creating a new
+        # form for each object (which there will be a lot),
+        # is very process intensive
+        is_valid = True
+        for field in mass_changes_fields:
+            if "invalid" in data[field]:
+                is_valid = False
+
+        if not form.is_valid() or not is_valid:
+            raise ValidationError("Not all forms are correct")
 
     def async_mass_change_view(
             self,
@@ -137,18 +158,21 @@ class AsyncMassAdmin(massadmin.MassAdmin):
         mass_changes_fields = request.POST.getlist("_mass_change")
         ModelForm = self.get_form(request, obj)
         if request.method == 'POST':
-            data = self.get_excluded_fields(request)
-            
             try:
+                data = self.get_mass_change_data(request)
+
+                # Only one form needs to be validated, as the same fields are being used
+                # for all objects, and form only checks edited fields, other cases are being
+                # checked during update
+                self.validate_form(request, ModelForm, mass_changes_fields, obj, data)
+
                 # In case of errors Atomic will rollback whole transaction 
                 with transaction.atomic():
                     i = 0
                     while i < len(object_ids):
                         # Update will trigger all checks before actually saving the data,
                         # making it more optimized than manually checking before updating
-                        queryset.filter(pk__in=object_ids[i : i + 500]).update(
-                            **data
-                        )
+                        queryset.filter(pk__in=object_ids[i : i + 500]).update(**data)
                         i += 500
 
                 return self.response_change(request, queryset.filter(pk__in=[object_id]).first())
@@ -212,7 +236,7 @@ class AsyncMassAdmin(massadmin.MassAdmin):
         )
 
 
-class AsyncMassEditMixin:
+class ImprovedMassEditMixin:
     actions = (
         mass_change_selected,
     )
