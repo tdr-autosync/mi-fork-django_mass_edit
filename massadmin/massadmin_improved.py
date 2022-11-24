@@ -114,7 +114,7 @@ class ImprovedMassAdmin(massadmin.MassAdmin):
         for fieldname, field in list(form.fields.items()):
             if fieldname not in mass_changes_fields:
                 del form.fields[fieldname]
-        
+
         # Django might automatically invalidate the field before sending
         # so we have to catch it in an efficient way, as creating a new
         # form for each object (which there will be a lot),
@@ -165,13 +165,13 @@ class ImprovedMassAdmin(massadmin.MassAdmin):
 
                 self.validate_form(request, ModelForm, mass_changes_fields, obj, data)
 
-                # In case of errors Atomic will rollback whole transaction 
+                # In case of errors Atomic will rollback whole transaction
                 with transaction.atomic():
                     i = 0
                     while i < len(object_ids):
                         # Update will trigger all checks before actually saving the data,
                         # making it more optimized than manually checking before updating
-                        queryset.filter(pk__in=object_ids[i : i + 500]).update(**data)
+                        queryset.filter(pk__in=object_ids[i: i + 500]).update(**data)
                         i += 500
 
                 return self.response_change(request, queryset.filter(pk__in=[object_id]).first())
@@ -180,7 +180,7 @@ class ImprovedMassAdmin(massadmin.MassAdmin):
             # ability to return almost any error
             except Exception:
                 general_error = sys.exc_info()[1]
-        
+
         formsets = []
         prefixes = {}
         for FormSet in massadmin.get_formsets(self, request, obj):
