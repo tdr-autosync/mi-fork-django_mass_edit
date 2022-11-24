@@ -27,14 +27,12 @@ from django.http import Http404, HttpResponseRedirect
 from django.utils.html import escape
 from django.contrib.admin.templatetags.admin_urls import add_preserved_filters
 from django.db import transaction
+from django.forms.formsets import all_valid
 
 from . import settings
 from . import tasks
 from . import massadmin
-import logging
 import sys
-
-logger = logging.getLogger(__name__)
 
 
 def mass_change_selected(modeladmin, request, queryset):
@@ -70,8 +68,6 @@ mass_change_selected.short_description = _('Mass Edit')
 def async_mass_change_view(request, app_name, model_name, object_ids, admin_site=None):
     if object_ids.startswith("session-"):
         object_ids = request.session.get(object_ids)
-    # Here is the model to send to celery!!!!
-    # Try using admin_site too so we don't have to do this weird stuff
     ma = AsyncMassAdmin(app_name, model_name, admin_site or admin.site,)
     return ma.async_mass_change_view(request, object_ids)
 
@@ -91,6 +87,23 @@ class AsyncMassAdmin(massadmin.MassAdmin):
 
         super(AsyncMassAdmin, self).__init__(model, admin_site)
 
+    def get_excluded_fields(self, request):
+        data = {}
+
+        for mass_change_field in request.POST.getlist("_mass_change"):
+            if mass_change_field in request.POST:
+                if request.POST[mass_change_field] == "on":
+                    data[mass_change_field] = True
+                else:
+                    data[mass_change_field] = request.POST[mass_change_field]
+            elif mass_change_field in request.FILES:
+                data[mass_change_field] = request.FILES[mass_change_field]
+            else:
+                # Only booleans that are set to false don't show up in the list
+                data[mass_change_field] = False
+
+        return data
+
     def async_mass_change_view(
             self,
             request,
@@ -101,13 +114,10 @@ class AsyncMassAdmin(massadmin.MassAdmin):
         opts = self.model._meta
         general_error = None
 
-        queryset = getattr(
-            self.admin_obj,
-            "massadmin_queryset",
-            self.get_queryset
-        )(request)
+        queryset = getattr(self.admin_obj, "massadmin_queryset", self.get_queryset)(request)
 
-        object_id = comma_separated_object_ids.split(',')[0]
+        object_ids = comma_separated_object_ids.split(',')
+        object_id = object_ids[0]
 
         try:
             obj = queryset.get(pk=unquote(object_id))
@@ -124,76 +134,31 @@ class AsyncMassAdmin(massadmin.MassAdmin):
                         opts.verbose_name),
                     'key': escape(object_id)})
 
-        formsets = []
         mass_changes_fields = request.POST.getlist("_mass_change")
         ModelForm = self.get_form(request, obj)
         if request.method == 'POST':
-            data = {}
-
+            data = self.get_excluded_fields(request)
+            
             try:
-                for mass_change_field in request.POST.getlist("_mass_change"):
-                    if mass_change_field in request.POST:
-                        data[mass_change_field] = request.POST[mass_change_field]
-                    elif mass_change_field in request.FILES:
-                        data[mass_change_field] = request.FILES[mass_change_field]
-                    else:
-                        raise ValueError("Missing data")
-
-                # Most intensive part
-                # After testing I estimate that each 10k items take around 1s of processing
-                # assumming server having a great day and full capability,
-                # so we're limited to about 200k - 250k items edited at a time,
-                # so all other functions can occur before timeout.
-
-                # Assuming for all server delays we can expect to have around
-                # 100k items edited at a single query without getting errors
-
-                # This statement will be refined with information from squash instance
-                # As test above were conducted locally
-                objects = queryset.filter(pk__in=comma_separated_object_ids.split(','))
-
-                form_fields = ModelForm(
-                    request.POST,
-                    request.FILES,
-                    instance=objects[0]
-                ).fields
-
-                exclude = []
-                for fieldname, field in list(form_fields.items()):
-                    if fieldname not in mass_changes_fields:
-                        exclude.append(fieldname)
-
-                for obj in objects:
-                    form = ModelForm(
-                        request.POST,
-                        request.FILES,
-                        instance=obj
-                    )
-
-                    for exclude_fieldname in exclude:
-                        del form.fields[exclude_fieldname]
-
-                    if not form.is_valid():
-                        raise ValidationError("Form is not correct")
-
+                # In case of errors Atomic will rollback whole transaction 
                 with transaction.atomic():
-                    queryset.filter(pk__in=[object_id]).update(**data)
-
-                tasks.mass_edit.delay(
-                    comma_separated_object_ids,
-                    self.app_name,
-                    self.model_name,
-                    mass_changes_fields,
-                    object_id,
-                )
+                    i = 0
+                    while i < len(object_ids):
+                        # Update will trigger all checks before actually saving the data,
+                        # making it more optimized than manually checking before updating
+                        queryset.filter(pk__in=object_ids[i : i + 500]).update(
+                            **data
+                        )
+                        i += 500
 
                 return self.response_change(request, queryset.filter(pk__in=[object_id]).first())
 
-            # We should capture only errors caused by the code, but for now
-            # reusing what was in massadmin.py to not add too much at once
+            # We have to catch all exceptions here due to atomic's
+            # ability to return almost any error
             except Exception:
                 general_error = sys.exc_info()[1]
-
+        
+        formsets = []
         prefixes = {}
         for FormSet in massadmin.get_formsets(self, request, obj):
             prefix = FormSet.get_default_prefix()
