@@ -121,7 +121,7 @@ class ImprovedMassAdmin(massadmin.MassAdmin):
         # is very process intensive
         is_valid = True
         for field in mass_changes_fields:
-            if "invalid" in data[field]:
+            if "invalid" in str(data[field]):
                 is_valid = False
 
         if not form.is_valid() or not is_valid:
