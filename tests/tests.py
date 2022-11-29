@@ -82,13 +82,11 @@ class AdminViewTest(TestCase):
 
     @override_settings(ROOT_URLCONF='tests.urls_custom_admin')
     def test_custom_admin_site_update(self):
-        """ We test_update for a custom admin on top of a regular as well
-        """
+        """ We test_update for a custom admin on top of a regular as well """
         self.test_update('myadmin')
 
     def test_preserve_filters(self):
-        """ Preserve filters which was choosed in lookup form
-        """
+        """ Preserve filters which was choosed in lookup form """
         model = CustomAdminModel.objects.create(name="aaaa")
         # filter model list by some parameter
         query = "name__startswith=a"
@@ -109,8 +107,7 @@ class AdminViewTest(TestCase):
         self.assertRedirects(response, changelist_url)
 
     def test_invalid_form(self):
-        """ Save nothing if some forms are invalid
-        """
+        """ Save nothing if some forms are invalid """
         models = [CustomAdminModel.objects.create(name="model {}".format(i))
                   for i in range(0, 3)]
 
@@ -124,8 +121,7 @@ class AdminViewTest(TestCase):
         self.assertEqual(list(new_names), [m.name for m in models])
 
     def test_get_fieldsets(self):
-        """ Use the admin_obj's get_fieldsets method if it is defined
-        """
+        """ Use the admin_obj's get_fieldsets method if it is defined """
         names = [
             {
                 "first_name": "first {}".format(i),
@@ -150,8 +146,7 @@ class AdminViewTest(TestCase):
 
 
 class CustomizationTestCase(TestCase):
-    """ MassAdmin has all customized options from related ModelAdmin
-    """
+    """ MassAdmin has all customized options from related ModelAdmin """
     def setUp(self):
         self.user = User.objects.create_superuser(
             'temporary', 'temporary@gmail.com', 'temporary')
@@ -159,23 +154,20 @@ class CustomizationTestCase(TestCase):
 
     def test_custom_from(self):
         """ If form is overridden in ModelAdmin, it should be overridden in
-        MassAdmin too.
-        """
+        MassAdmin too. """
         ma = MassAdmin(CustomAdminModel, admin.site)
         self.assertEqual(ma.form, CustomAdminForm)
 
     def test_inheritance(self):
         """ If modeladmin is inherited from another customized modeladmin,
-        MassAdmin get overriding from all of them.
-        """
+        MassAdmin get overriding from all of them. """
         ma = MassAdmin(InheritedAdminModel, admin.site)
         self.assertEqual(ma.raw_id_fields, InheritedAdmin.raw_id_fields)
         self.assertEqual(ma.readonly_fields, BaseAdmin.readonly_fields)
 
     def test_each_context(self):
         """ If admin site overrides each_context, custom context variables are
-        passed to the render function
-        """
+        passed to the render function """
         custom_site = CustomAdminSite()
         custom_site.register(CustomAdminModel)
         mock_ma = MockRenderMassAdmin(CustomAdminModel, custom_site)
@@ -244,13 +236,11 @@ class AsyncAdminViewTest(TestCase):
 
     @override_settings(ROOT_URLCONF='tests.urls_custom_admin')
     def test_custom_admin_site_update(self):
-        """ We test_update for a custom admin on top of a regular as well
-        """
+        """ We test_update for a custom admin on top of a regular as well """
         self.test_update('myadmin')
 
     def test_preserve_filters(self):
-        """ Preserve filters which was choosed in lookup form
-        """
+        """ Preserve filters which was choosed in lookup form """
         model = CustomAdminModel.objects.create(name="aaaa")
         # filter model list by some parameter
         query = "name__startswith=a"
@@ -271,8 +261,7 @@ class AsyncAdminViewTest(TestCase):
         self.assertRedirects(response, changelist_url)
 
     def test_invalid_form(self):
-        """ Save nothing if some forms are invalid
-        """
+        """ Save nothing if some forms are invalid """
         models = [CustomAdminModel.objects.create(name="model {}".format(i))
                   for i in range(0, 3)]
 
@@ -286,8 +275,7 @@ class AsyncAdminViewTest(TestCase):
         self.assertEqual(list(new_names), [m.name for m in models])
 
     def test_get_fieldsets(self):
-        """ Use the admin_obj's get_fieldsets method if it is defined
-        """
+        """ Use the admin_obj's get_fieldsets method if it is defined """
         names = [
             {
                 "first_name": "first {}".format(i),
@@ -321,23 +309,20 @@ class AsyncCustomizationTestCase(TestCase):
 
     def test_custom_from(self):
         """ If form is overridden in ModelAdmin, it should be overridden in
-        ImprovedMassAdmin too.
-        """
+        ImprovedMassAdmin too. """
         ma = ImprovedMassAdmin("tests", "CustomAdminModel", admin.site)
         self.assertEqual(ma.form, CustomAdminForm)
 
     def test_inheritance(self):
         """ If modeladmin is inherited from another customized modeladmin,
-        ImprovedMassAdmin get overriding from all of them.
-        """
+        ImprovedMassAdmin get overriding from all of them. """
         ma = ImprovedMassAdmin("tests", "InheritedAdminModel", admin.site)
         self.assertEqual(ma.raw_id_fields, InheritedAdmin.raw_id_fields)
         self.assertEqual(ma.readonly_fields, BaseAdmin.readonly_fields)
 
     def test_each_context(self):
         """ If admin site overrides each_context, custom context variables are
-        passed to the render function
-        """
+        passed to the render function """
         custom_site = CustomAdminSite()
         custom_site.register(CustomAdminModel)
         mock_ma = MockRenderMassAdmin(CustomAdminModel, custom_site)

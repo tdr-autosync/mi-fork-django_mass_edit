@@ -133,7 +133,7 @@ class ImprovedMassAdmin(massadmin.MassAdmin):
             comma_separated_object_ids,
             extra_context=None
     ):
-        """The 'mass change' admin view for this model."""
+        """ The 'mass change' admin view for this model. """
         opts = self.model._meta
         general_error = None
 
