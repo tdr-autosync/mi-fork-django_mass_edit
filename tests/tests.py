@@ -300,8 +300,7 @@ class AsyncAdminViewTest(TestCase):
 
 
 class AsyncCustomizationTestCase(TestCase):
-    """ ImprovedMassAdmin has all customized options from related ModelAdmin
-    """
+    """ ImprovedMassAdmin has all customized options from related ModelAdmin """
     def setUp(self):
         self.user = User.objects.create_superuser(
             'temporary', 'temporary@gmail.com', 'temporary')
