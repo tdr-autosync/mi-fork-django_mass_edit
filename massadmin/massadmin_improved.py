@@ -127,7 +127,7 @@ class ImprovedMassAdmin(massadmin.MassAdmin):
                 is_valid = False
 
         if not form.is_valid() or not is_valid:
-            raise ValidationError("Not all forms are correct")
+            raise ValidationError(form.errors)
 
     def async_mass_change_view(
             self,
