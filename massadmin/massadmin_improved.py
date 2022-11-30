@@ -86,6 +86,7 @@ class ImprovedMassAdmin(massadmin.MassAdmin):
         super(ImprovedMassAdmin, self).__init__(model, admin_site)
 
     def get_mass_change_data(self, request):
+        """Compiles mass_change fields into a dictionary"""
         data = {}
 
         for mass_change_field in request.POST.getlist("_mass_change"):
@@ -103,6 +104,7 @@ class ImprovedMassAdmin(massadmin.MassAdmin):
         return data
 
     def validate_form(self, request, ModelForm, mass_changes_fields, obj, data):
+        """Validates a single object to test for any user error"""
         # Only one form needs to be validated, as the same fields are being used
         # for all objects, and form only checks edited fields, other cases are being
         # checked during update
