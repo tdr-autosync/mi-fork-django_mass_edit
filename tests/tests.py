@@ -8,8 +8,8 @@ except ImportError:  # Django<2.0
     from django.core.urlresolvers import reverse
 from massadmin.massadmin import MassAdmin, get_mass_change_redirect_url
 from massadmin.massadmin_improved import (
-    ImprovedMassAdmin,
-    get_mass_change_redirect_url as async_get_mass_change_redirect_url
+    MassAdmin as ImprovedMassAdmin,
+    get_mass_change_redirect_url as improved_get_mass_change_redirect_url
 )
 
 from .admin import CustomAdminForm, BaseAdmin, InheritedAdmin
@@ -183,14 +183,14 @@ class CustomizationTestCase(TestCase):
         self.assertEqual(render_args['context']['custom_variable'], 'custom_value')
 
 
-def async_get_massadmin_url(objects, session):
+def improved_get_massadmin_url(objects, session):
     if not hasattr(objects, "__iter__"):
         objects = [objects]
     opts = objects[0]._meta
-    return async_get_mass_change_redirect_url(opts, [o.pk for o in objects], session)
+    return improved_get_mass_change_redirect_url(opts, [o.pk for o in objects], session)
 
 
-class AsyncAdminViewTest(TestCase):
+class ImprovedAdminViewTest(TestCase):
 
     def setUp(self):
         self.user = User.objects.create_superuser(
@@ -198,7 +198,7 @@ class AsyncAdminViewTest(TestCase):
         self.client.login(username='temporary', password='temporary')
 
     def test_massadmin_form_generation(self):
-        response = self.client.get(async_get_massadmin_url(self.user, self.client.session))
+        response = self.client.get(improved_get_massadmin_url(self.user, self.client.session))
         self.assertContains(response, 'First name')
 
     def test_massadmin_form_generation_with_custom_template(self):
@@ -206,27 +206,27 @@ class AsyncAdminViewTest(TestCase):
             CustomAdminModel2.objects.create(name="model {}".format(i))
             for i in range(0, 3)
         ]
-        response = self.client.get(async_get_massadmin_url(models, self.client.session))
+        response = self.client.get(improved_get_massadmin_url(models, self.client.session))
         self.assertContains(response, 'model 0')
 
     def test_massadmin_form_generation_with_many_objects(self):
         models = [CustomAdminModel.objects.create(name="model {}".format(i))
                   for i in range(0, 2000)]
-        response = self.client.get(async_get_massadmin_url(models, self.client.session))
+        response = self.client.get(improved_get_massadmin_url(models, self.client.session))
         self.assertContains(response, 'Change custom admin model')
 
     @override_settings(MASSEDIT={'SESSION_BASED_URL_THRESHOLD': 3})
     def test_massadmin_form_generation_with_many_objects_settings(self):
         models = [CustomAdminModel.objects.create(name="model {}".format(i))
                   for i in range(0, 2)]
-        response = self.client.get(async_get_massadmin_url(models, self.client.session))
+        response = self.client.get(improved_get_massadmin_url(models, self.client.session))
         self.assertContains(response, 'Change custom admin model')
 
     def test_update(self, admin_name='admin'):
         models = [CustomAdminModel.objects.create(name="model {}".format(i))
                   for i in range(0, 3)]
 
-        response = self.client.post(async_get_massadmin_url(models, self.client.session),
+        response = self.client.post(improved_get_massadmin_url(models, self.client.session),
                                     {"_mass_change": "name",
                                      "name": "new name"})
         self.assertRedirects(response, get_changelist_url(CustomAdminModel, admin_name))
@@ -265,7 +265,7 @@ class AsyncAdminViewTest(TestCase):
         models = [CustomAdminModel.objects.create(name="model {}".format(i))
                   for i in range(0, 3)]
 
-        response = self.client.post(async_get_massadmin_url(models, self.client.session),
+        response = self.client.post(improved_get_massadmin_url(models, self.client.session),
                                     {"_mass_change": "name",
                                      "name": "invalid {}".format(models[-1].pk)})
         self.assertEqual(response.status_code, 200)
@@ -285,7 +285,7 @@ class AsyncAdminViewTest(TestCase):
             for i in range(3)
         ]
         models = [FieldsetsAdminModel.objects.create(**n) for n in names]
-        response = self.client.get(async_get_massadmin_url(models, self.client.session))
+        response = self.client.get(improved_get_massadmin_url(models, self.client.session))
         self.assertEqual(response.status_code, 200)
 
         expected_fieldset_group_1 = """
@@ -299,7 +299,7 @@ class AsyncAdminViewTest(TestCase):
         self.assertContains(response, expected_fieldset_group_2, html=True)
 
 
-class AsyncCustomizationTestCase(TestCase):
+class ImprovedCustomizationTestCase(TestCase):
     """ ImprovedMassAdmin has all customized options from related ModelAdmin """
     def setUp(self):
         self.user = User.objects.create_superuser(
@@ -307,8 +307,7 @@ class AsyncCustomizationTestCase(TestCase):
         self.factory = RequestFactory()
 
     def test_custom_from(self):
-        """ If form is overridden in ModelAdmin, it should be overridden in
-        ImprovedMassAdmin too. """
+        """ Ensure that a form overridden in `ModelAdmin` is hidden in `MassAdmin` too. """
         ma = ImprovedMassAdmin("tests", "CustomAdminModel", admin.site)
         self.assertEqual(ma.form, CustomAdminForm)
 
