@@ -27,7 +27,7 @@ import sys
 
 
 def mass_change_selected(modeladmin, request, queryset):
-    """Create MassAdmin url containing all selected items"""
+    """Create MassAdminImproved url containing all selected items"""
     selected = queryset.values_list('pk', flat=True)
 
     redirect_url = get_mass_change_redirect_url(modeladmin.model._meta, selected, request.session)
@@ -40,7 +40,7 @@ def mass_change_selected(modeladmin, request, queryset):
 
 
 def get_mass_change_redirect_url(model_meta, pk_list, session):
-    """Get MassAdmin url"""
+    """Get MassAdminImproved url"""
     object_ids = ",".join(str(s) for s in pk_list)
     if len(object_ids) > settings.SESSION_BASED_URL_THRESHOLD:
         hash_id = "session-%s" % hashlib.md5(object_ids.encode('utf-8')).hexdigest()
@@ -59,17 +59,17 @@ mass_change_selected.short_description = _('Mass Edit')
 
 
 def mass_change_view(request, app_name, model_name, object_ids, admin_site=None):
-    """Handles response using MassAdmin pages"""
+    """Handles response using MassAdminImproved pages"""
     if object_ids.startswith("session-"):
         object_ids = request.session.get(object_ids)
-    ma = MassAdmin(app_name, model_name, admin_site or admin.site,)
+    ma = MassAdminImproved(app_name, model_name, admin_site or admin.site,)
     return ma.mass_change_view(request, object_ids)
 
 
 mass_change_view = staff_member_required(mass_change_view)
 
 
-class MassAdmin(massadmin.MassAdmin):
+class MassAdminImproved(massadmin.MassAdmin):
 
     mass_change_form_template = None
 
@@ -79,7 +79,7 @@ class MassAdmin(massadmin.MassAdmin):
 
         model = get_model(app_name, model_name)
 
-        super(MassAdmin, self).__init__(model, admin_site)
+        super(MassAdminImproved, self).__init__(model, admin_site)
 
     def get_mass_change_data(self, request):
         """Compiles mass_change fields into a dictionary"""
@@ -102,7 +102,7 @@ class MassAdmin(massadmin.MassAdmin):
     def validate_form(self, request, ModelForm, mass_changes_fields, obj, data):
         """
         Validates a single object to test for any user error
-        
+
         Only one form needs to be validated, as the same fields are being used
         for all objects, and form only checks edited fields, other cases are being
         checked during update
@@ -155,7 +155,7 @@ class MassAdmin(massadmin.MassAdmin):
         # ability to return almost any error
         except Exception:
             general_error = sys.exc_info()[1]
-        
+
         return (formsets, errors, errors_list, general_error)
 
 

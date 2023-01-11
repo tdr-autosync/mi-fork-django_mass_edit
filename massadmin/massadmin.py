@@ -202,9 +202,11 @@ class MassAdmin(admin.ModelAdmin):
             context)
 
     def edit_all_values(self, request, queryset, object_ids, ModelForm, mass_changes_fields):
+        """Edits given fields in given objects in an atomic transaction"""
+
         formsets = []
         errors, errors_list = None, None
-        
+
         # commit only when all forms are valid
         try:
             with transaction.atomic():
@@ -335,7 +337,13 @@ class MassAdmin(admin.ModelAdmin):
         errors, errors_list = None, None
         mass_changes_fields = request.POST.getlist("_mass_change")
         if request.method == 'POST':
-            response = self.edit_all_values(request, queryset, object_ids, ModelForm, mass_changes_fields)
+            response = self.edit_all_values(
+                request,
+                queryset,
+                object_ids, 
+                ModelForm,
+                mass_changes_fields
+            )
 
             if type(response) is tuple:
                 formsets, errors, errors_list, general_error = response

@@ -8,7 +8,7 @@ except ImportError:  # Django<2.0
     from django.core.urlresolvers import reverse
 from massadmin.massadmin import MassAdmin, get_mass_change_redirect_url
 from massadmin.massadmin_improved import (
-    MassAdmin as ImprovedMassAdmin,
+    MassAdminImproved,
     get_mass_change_redirect_url as improved_get_mass_change_redirect_url
 )
 
@@ -300,7 +300,7 @@ class ImprovedAdminViewTest(TestCase):
 
 
 class ImprovedCustomizationTestCase(TestCase):
-    """ ImprovedMassAdmin has all customized options from related ModelAdmin """
+    """ MassAdminImproved has all customized options from related ModelAdmin """
     def setUp(self):
         self.user = User.objects.create_superuser(
             'temporary', 'temporary@gmail.com', 'temporary')
@@ -308,13 +308,13 @@ class ImprovedCustomizationTestCase(TestCase):
 
     def test_custom_from(self):
         """ Ensure that a form overridden in `ModelAdmin` is hidden in `MassAdmin` too. """
-        ma = ImprovedMassAdmin("tests", "CustomAdminModel", admin.site)
+        ma = MassAdminImproved("tests", "CustomAdminModel", admin.site)
         self.assertEqual(ma.form, CustomAdminForm)
 
     def test_inheritance(self):
         """ If modeladmin is inherited from another customized modeladmin,
-        ImprovedMassAdmin get overriding from all of them. """
-        ma = ImprovedMassAdmin("tests", "InheritedAdminModel", admin.site)
+        MassAdminImproved get overriding from all of them. """
+        ma = MassAdminImproved("tests", "InheritedAdminModel", admin.site)
         self.assertEqual(ma.raw_id_fields, InheritedAdmin.raw_id_fields)
         self.assertEqual(ma.readonly_fields, BaseAdmin.readonly_fields)
 
