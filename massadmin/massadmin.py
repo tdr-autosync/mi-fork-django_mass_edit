@@ -340,7 +340,7 @@ class MassAdmin(admin.ModelAdmin):
             response = self.edit_all_values(
                 request,
                 queryset,
-                object_ids, 
+                object_ids,
                 ModelForm,
                 mass_changes_fields
             )
