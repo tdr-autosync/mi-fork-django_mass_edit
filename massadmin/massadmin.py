@@ -201,6 +201,100 @@ class MassAdmin(admin.ModelAdmin):
                 "admin/mass_change_form.html"],
             context)
 
+    def edit_all_values(self, request, queryset, object_ids, ModelForm, mass_changes_fields):
+        """Edits given fields in given objects in an atomic transaction"""
+
+        formsets = []
+        errors, errors_list = None, None
+
+        # commit only when all forms are valid
+        try:
+            with transaction.atomic():
+                objects_count = 0
+                changed_count = 0
+                objects = queryset.filter(pk__in=object_ids)
+                for obj in objects:
+                    objects_count += 1
+                    form = ModelForm(
+                        request.POST,
+                        request.FILES,
+                        instance=obj)
+
+                    # refresh InMemoryUploadedFile object.
+                    # It should not cause memory leaks as it
+                    # only fseeks to the beggining of the media file.
+                    for in_memory_file in request.FILES.values():
+                        in_memory_file.open()
+
+                    exclude = []
+                    for fieldname, field in list(form.fields.items()):
+                        if fieldname not in mass_changes_fields:
+                            exclude.append(fieldname)
+
+                    for exclude_fieldname in exclude:
+                        del form.fields[exclude_fieldname]
+
+                    if form.is_valid():
+                        form_validated = True
+                        new_object = self.save_form(
+                            request,
+                            form,
+                            change=True)
+                    else:
+                        form_validated = False
+                        new_object = obj
+                    prefixes = {}
+                    for FormSet in get_formsets(self, request, new_object):
+                        prefix = FormSet.get_default_prefix()
+                        prefixes[prefix] = prefixes.get(prefix, 0) + 1
+                        if prefixes[prefix] != 1:
+                            prefix = "%s-%s" % (prefix, prefixes[prefix])
+                        if prefix in mass_changes_fields:
+                            formset = FormSet(
+                                request.POST,
+                                request.FILES,
+                                instance=new_object,
+                                prefix=prefix)
+                            formsets.append(formset)
+
+                    if all_valid(formsets) and form_validated:
+                        # self.admin_obj.save_model(request, new_object, form, change=True)
+                        self.save_model(
+                            request,
+                            new_object,
+                            form,
+                            change=True)
+                        form.save_m2m()
+                        for formset in formsets:
+                            self.save_formset(
+                                request,
+                                form,
+                                formset,
+                                change=True)
+
+                        change_message = self.construct_change_message(
+                            request,
+                            form,
+                            formsets)
+                        self.log_change(
+                            request,
+                            new_object,
+                            change_message)
+                        changed_count += 1
+
+                if changed_count == objects_count:
+                    return self.response_change(request, new_object)
+                else:
+                    errors = form.errors
+                    errors_list = helpers.AdminErrorList(form, formsets)
+                    # Raise error for rollback transaction in atomic block
+                    raise ValidationError("Not all forms is correct")
+
+        except Exception:
+            general_error = sys.exc_info()[1]
+
+        return (formsets, errors, errors_list, general_error)
+
     def mass_change_view(
             self,
             request,
@@ -243,91 +337,18 @@ class MassAdmin(admin.ModelAdmin):
         errors, errors_list = None, None
         mass_changes_fields = request.POST.getlist("_mass_change")
         if request.method == 'POST':
-            # commit only when all forms are valid
-            try:
-                with transaction.atomic():
-                    objects_count = 0
-                    changed_count = 0
-                    objects = queryset.filter(pk__in=object_ids)
-                    for obj in objects:
-                        objects_count += 1
-                        form = ModelForm(
-                            request.POST,
-                            request.FILES,
-                            instance=obj)
+            response = self.edit_all_values(
+                request,
+                queryset,
+                object_ids,
+                ModelForm,
+                mass_changes_fields
+            )
 
-                        # refresh InMemoryUploadedFile object.
-                        # It should not cause memory leaks as it
-                        # only fseeks to the beggining of the media file.
-                        for in_memory_file in request.FILES.values():
-                            in_memory_file.open()
-
-                        exclude = []
-                        for fieldname, field in list(form.fields.items()):
-                            if fieldname not in mass_changes_fields:
-                                exclude.append(fieldname)
-
-                        for exclude_fieldname in exclude:
-                            del form.fields[exclude_fieldname]
-
-                        if form.is_valid():
-                            form_validated = True
-                            new_object = self.save_form(
-                                request,
-                                form,
-                                change=True)
-                        else:
-                            form_validated = False
-                            new_object = obj
-                        prefixes = {}
-                        for FormSet in get_formsets(self, request, new_object):
-                            prefix = FormSet.get_default_prefix()
-                            prefixes[prefix] = prefixes.get(prefix, 0) + 1
-                            if prefixes[prefix] != 1:
-                                prefix = "%s-%s" % (prefix, prefixes[prefix])
-                            if prefix in mass_changes_fields:
-                                formset = FormSet(
-                                    request.POST,
-                                    request.FILES,
-                                    instance=new_object,
-                                    prefix=prefix)
-                                formsets.append(formset)
-
-                        if all_valid(formsets) and form_validated:
-                            # self.admin_obj.save_model(request, new_object, form, change=True)
-                            self.save_model(
-                                request,
-                                new_object,
-                                form,
-                                change=True)
-                            form.save_m2m()
-                            for formset in formsets:
-                                self.save_formset(
-                                    request,
-                                    form,
-                                    formset,
-                                    change=True)
-
-                            change_message = self.construct_change_message(
-                                request,
-                                form,
-                                formsets)
-                            self.log_change(
-                                request,
-                                new_object,
-                                change_message)
-                            changed_count += 1
-
-                    if changed_count == objects_count:
-                        return self.response_change(request, new_object)
-                    else:
-                        errors = form.errors
-                        errors_list = helpers.AdminErrorList(form, formsets)
-                        # Raise error for rollback transaction in atomic block
-                        raise ValidationError("Not all forms is correct")
-
-            except Exception:
-                general_error = sys.exc_info()[1]
+            if type(response) is tuple:
+                formsets, errors, errors_list, general_error = response
+            else:
+                return response
 
         form = ModelForm(instance=obj)
         form._errors = errors
