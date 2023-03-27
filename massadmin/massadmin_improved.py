@@ -128,6 +128,8 @@ class MassAdminImproved(massadmin.MassAdmin):
         if not form.is_valid() or not is_valid:
             raise ValidationError(form.errors)
 
+        return form.cleaned_data
+
     def edit_all_values(self, request, queryset, object_ids, ModelForm, mass_changes_fields):
         object_id = object_ids[0]
         formsets = []
@@ -138,7 +140,7 @@ class MassAdminImproved(massadmin.MassAdmin):
 
             data = self.get_mass_change_data(request)
 
-            self.validate_form(request, ModelForm, mass_changes_fields, obj, data)
+            data = self.validate_form(request, ModelForm, mass_changes_fields, obj, data)
 
             # In case of errors Atomic will rollback whole transaction
             with transaction.atomic():
